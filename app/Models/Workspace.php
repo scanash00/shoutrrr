@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Database\Factories\WorkspaceFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+#[Fillable([
+    'name',
+    'slug',
+    'logo',
+    'timezone',
+    'owner_id',
+])]
+class Workspace extends Model
+{
+    /** @use HasFactory<WorkspaceFactory> */
+    use HasFactory, HasUuids;
+
+    public function getLogoAttribute(?string $value): string
+    {
+        return $value ?: "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /**
+     * @return HasMany<WorkspaceMembership, $this>
+     */
+    public function members(): HasMany
+    {
+        return $this->hasMany(WorkspaceMembership::class);
+    }
+
+    /**
+     * @return HasMany<WorkspaceInvitation, $this>
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(WorkspaceInvitation::class);
+    }
+}
