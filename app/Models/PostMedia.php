@@ -46,6 +46,14 @@ class PostMedia extends Model
     protected $table = 'post_media';
 
     /**
+     * @return BelongsTo<Workspace, $this>
+     */
+    public function workspace(): BelongsTo
+    {
+        return $this->belongsTo(Workspace::class);
+    }
+
+    /**
      * @return BelongsTo<Post, $this>
      */
     public function post(): BelongsTo

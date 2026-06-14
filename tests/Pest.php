@@ -1,6 +1,13 @@
 <?php
 
+use App\Models\McpGrantWorkspace;
+use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Laravel\Passport\AccessToken;
+use Laravel\Passport\Client;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /*
@@ -45,4 +52,52 @@ expect()->extend('toBeOne', fn () => $this->toBe(1));
 function something()
 {
     // ..
+}
+
+/**
+ * Create a Passport access token bound to the given workspace and install it
+ * on the user so that WorkspaceTool::workspaceId() can resolve it via token().
+ *
+ * We create the Token model directly (bypassing the OAuth flow) because the
+ * full personal-access grant requires a running authorization server. We then
+ * wrap it in an AccessToken (the ScopeAuthorizable that withAccessToken expects),
+ * with 'oauth_access_token_id' set so AccessToken::__get('id') proxies to the
+ * underlying Token id, which is what WorkspaceTool::workspaceId() reads.
+ */
+function bindTokenToWorkspace(User $user, Workspace $workspace): void
+{
+    $client = Client::factory()->asPersonalAccessTokenClient()->create([
+        'provider' => 'users',
+        'secret' => Str::random(40),
+    ]);
+
+    $tokenId = Str::random(80);
+
+    $token = Passport::token()->forceFill([
+        'id' => $tokenId,
+        'user_id' => $user->id,
+        'client_id' => $client->id,
+        'name' => 'mcp-test',
+        'scopes' => [],
+        'revoked' => false,
+        'expires_at' => now()->addYear(),
+    ]);
+    $token->save();
+
+    McpGrantWorkspace::create([
+        'user_id' => $user->id,
+        'client_id' => $client->id,
+        'workspace_id' => $workspace->id,
+        'access_token_id' => $tokenId,
+    ]);
+
+    // AccessToken wraps the underlying Token and implements ScopeAuthorizable.
+    // Setting oauth_access_token_id allows AccessToken::__get('id') to proxy
+    // to the Token model's primary key, which is what WorkspaceTool::workspaceId()
+    // reads via $request->user()->token()->id.
+    $accessToken = new AccessToken(['oauth_access_token_id' => $tokenId]);
+
+    // actingAs() stores the same $user instance on the guard, so token() remains
+    // set when the tool resolves $request->user() from the auth guard.
+    $user->withAccessToken($accessToken);
 }

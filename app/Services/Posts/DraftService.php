@@ -29,7 +29,7 @@ class DraftService
         return DB::transaction(function () use ($workspaceId, $author, $destination, $baseText): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
-                'account_set_id' => ($destination['kind'] === 'set') ? ($destination['id'] ?? null) : null,
+                'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
                 'author_id' => $author->id,
                 'base_text' => $baseText,
                 'status' => PostStatus::Draft->value,
@@ -158,7 +158,7 @@ class DraftService
 
             $post->forceFill([
                 'base_text' => $data->baseText,
-                'account_set_id' => $data->destinationKind === 'set' ? $data->destinationId : null,
+                'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
             ])->save();
 
             $this->syncTargets($post, $accountIds, $data->baseText, $autoSplitByAccount, $overrideByAccount);
@@ -168,6 +168,25 @@ class DraftService
 
             return $post->fresh(['targets', 'media']);
         });
+    }
+
+    /**
+     * The account set id to persist on the post — only when the destination is a set
+     * that actually belongs to the workspace. A foreign or unknown set id resolves to
+     * null (it would yield zero targets anyway), preventing a dangling reference.
+     *
+     * @param  array{kind: string, id?: string|null}  $destination
+     */
+    private function scopedAccountSetId(string $workspaceId, array $destination): ?string
+    {
+        if ($destination['kind'] !== 'set' || ! isset($destination['id'])) {
+            return null;
+        }
+
+        return AccountSet::withoutGlobalScopes()
+            ->where('workspace_id', $workspaceId)
+            ->whereKey($destination['id'])
+            ->value('id');
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CaptureMcpWorkspaceSelection;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\WorkspaceMiddleware;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             WorkspaceMiddleware::class,
+            CaptureMcpWorkspaceSelection::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
