@@ -1,4 +1,5 @@
 import { Link } from '@inertiajs/react';
+import { Plug } from 'lucide-react';
 import { useReducer } from 'react';
 
 import { useSchedulingTimezone } from '@/hooks/use-scheduling-timezone';
@@ -165,7 +166,7 @@ export default function Composer({
         state.overrideByAccount[activeAccount.id] !== undefined;
 
     return (
-        <div className="overflow-hidden rounded-xl border bg-card text-card-foreground">
+        <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
             {/* Tab-strip row */}
             <div className="flex items-center border-b border-border px-2 pt-2">
                 <PlatformTabs
@@ -240,11 +241,12 @@ export default function Composer({
                     state={severityFor(activeAccount.id)}
                 />
             ) : (
-                <div className="flex min-h-6 items-center px-4 pb-3.5 text-[12px] text-muted-foreground sm:px-[26px]">
+                <div className="px-4 pb-3.5 sm:px-[26px]">
                     <Link
                         href={accountsRoute().url}
-                        className="tracking-[-0.005em] underline-offset-2 hover:text-foreground hover:underline"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-[12px] tracking-[-0.005em] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                     >
+                        <Plug className="size-3.5" aria-hidden />
                         Connect an account to publish
                     </Link>
                 </div>
@@ -327,10 +329,6 @@ export default function Composer({
                     queueDisabled={queueState.status !== 'found'}
                     onSaveDraft={flush}
                     onEnsurePost={ensurePost}
-                    onSubmitted={(submitted) => {
-                        dispatch({ type: 'saveSucceeded', post: submitted });
-                        publishStatus.applyServerPost(submitted);
-                    }}
                 />
             </div>
 

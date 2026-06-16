@@ -1,5 +1,12 @@
 import { useDroppable } from '@dnd-kit/core';
+import { router } from '@inertiajs/react';
 
+import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { useSchedulingTimezone } from '@/hooks/use-scheduling-timezone';
 import { dayjs, monthRange, toUserTz } from '@/lib/datetime/dayjs';
 import type { Dayjs } from '@/lib/datetime/dayjs';
@@ -63,6 +70,7 @@ export function MonthGrid({
                     <DayCell
                         key={d.format('YYYY-MM-DD')}
                         day={d}
+                        tz={tz}
                         inMonth={d.month() === anchor.month()}
                         isToday={d.isSame(today, 'day')}
                         isPast={d.isBefore(today, 'day')}
@@ -77,6 +85,7 @@ export function MonthGrid({
 
 function DayCell({
     day,
+    tz,
     inMonth,
     isToday,
     isPast,
@@ -84,6 +93,7 @@ function DayCell({
     onEmptyClick,
 }: {
     day: Dayjs;
+    tz: string;
     inMonth: boolean;
     isToday: boolean;
     isPast: boolean;
@@ -125,6 +135,7 @@ function DayCell({
                 'group/day relative min-h-[96px] bg-background p-1.5 transition-colors',
                 'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
                 isPast && 'bg-muted/40',
+                isToday && 'bg-primary/5',
                 empty && !isPast && 'cursor-pointer hover:bg-accent/40',
                 isOver && 'ring-2 ring-primary/60 ring-inset',
             )}
@@ -159,9 +170,57 @@ function DayCell({
                         />
                     ))}
                     {overflow > 0 && (
-                        <div className="px-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase tabular-nums">
-                            +{overflow} more
-                        </div>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-full rounded-sm px-1.5 py-0.5 text-left text-[10px] font-medium tracking-wider text-muted-foreground uppercase tabular-nums transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                    +{overflow} more
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                align="start"
+                                className="w-60 p-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="px-2 py-1.5 text-[11px] font-semibold tracking-tight">
+                                    {day.format('dddd, MMM D')}
+                                </div>
+                                <div className="max-h-72 overflow-y-auto">
+                                    {posts.map((p) => {
+                                        const at =
+                                            p.scheduled_at ?? p.published_at;
+                                        const time = at
+                                            ? toUserTz(at, tz).format('h:mm A')
+                                            : '';
+
+                                        return (
+                                            <button
+                                                key={p.id}
+                                                type="button"
+                                                onClick={() =>
+                                                    router.visit(
+                                                        ComposerController.show(
+                                                            p.id,
+                                                        ).url,
+                                                    )
+                                                }
+                                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted"
+                                            >
+                                                <span className="w-14 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                                                    {time}
+                                                </span>
+                                                <span className="truncate text-[12px]">
+                                                    {p.base_text || 'Untitled'}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     )}
                 </div>
             </div>

@@ -1,7 +1,8 @@
-import { Check, RotateCw, X } from 'lucide-react';
+import { Check, ExternalLink, RotateCw, X } from 'lucide-react';
 
 import { PlatformGlyph } from '@/components/platform-glyph';
 import { Spinner } from '@/components/ui/spinner';
+import { platformLabel, postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 
 import { type TargetTone, targetStatusMeta } from './publish-status';
@@ -24,7 +25,7 @@ export type ChipTarget = Pick<
     TargetView,
     'id' | 'platform' | 'status' | 'error_message'
 > &
-    Partial<Pick<TargetView, 'handle' | 'display_name'>>;
+    Partial<Pick<TargetView, 'handle' | 'display_name' | 'remote_id'>>;
 
 type Props = {
     targets: ChipTarget[];
@@ -50,6 +51,14 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                 const meta = targetStatusMeta(target.status);
                 const isFailed = target.status === 'failed';
                 const isRetrying = retryingIds?.has(target.id) ?? false;
+                const permalink =
+                    target.status === 'published'
+                        ? postPermalink(
+                              target.platform,
+                              target.handle,
+                              target.remote_id,
+                          )
+                        : null;
 
                 return (
                     <li
@@ -109,6 +118,20 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                                 />
                                 Retry
                             </button>
+                        )}
+                        {permalink && (
+                            <a
+                                href={permalink}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                                View on {platformLabel(target.platform)}
+                                <ExternalLink
+                                    className="size-3"
+                                    aria-hidden="true"
+                                />
+                            </a>
                         )}
                     </li>
                 );

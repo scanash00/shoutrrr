@@ -1,7 +1,15 @@
 import { Link } from '@inertiajs/react';
+import { Inbox } from 'lucide-react';
 import { useState } from 'react';
 
-import { cn } from '@/lib/utils';
+import { FilterTabs } from '@/components/filter-tabs';
+import {
+    Empty,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
 import {
     PostRow,
     type PostRowData,
@@ -45,28 +53,27 @@ export function RecentFeed({ posts }: { posts: PostRowData[] }) {
             ? rows
             : rows.filter((post) => filterBucket(post.status) === tab);
 
+    const tabs = FILTERS.map((filter) => ({
+        value: filter.id,
+        label: filter.label,
+        count:
+            filter.id === 'all'
+                ? rows.length
+                : rows.filter((post) => filterBucket(post.status) === filter.id)
+                      .length,
+    }));
+
     return (
         <section className="mt-10">
-            <div className="mb-3 flex items-baseline gap-3 px-0.5">
+            <div className="mb-3 flex items-center gap-3 px-0.5">
                 <h2 className="text-[13px] font-semibold tracking-tight">
                     Recent posts
                 </h2>
-                <div className="flex gap-1">
-                    {FILTERS.map((filter) => (
-                        <button
-                            key={filter.id}
-                            type="button"
-                            onClick={() => setTab(filter.id)}
-                            className={cn(
-                                'rounded-full px-2.5 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                                tab === filter.id &&
-                                    'bg-muted font-medium text-foreground',
-                            )}
-                        >
-                            {filter.label}
-                        </button>
-                    ))}
-                </div>
+                <FilterTabs
+                    tabs={tabs}
+                    value={tab}
+                    onChange={(v) => setTab(v as FilterId)}
+                />
                 <Link
                     href={postsRoute().url}
                     className="ml-auto text-[12px] text-muted-foreground transition-colors hover:text-foreground"
@@ -76,9 +83,21 @@ export function RecentFeed({ posts }: { posts: PostRowData[] }) {
             </div>
 
             {filtered.length === 0 ? (
-                <p className="rounded-xl border border-border py-12 text-center text-[13px] text-muted-foreground">
-                    {tab === 'all' ? 'No posts yet.' : `No ${tab} posts.`}
-                </p>
+                <Empty className="py-10">
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Inbox />
+                        </EmptyMedia>
+                        <EmptyTitle>
+                            {tab === 'all' ? 'No posts yet' : `No ${tab} posts`}
+                        </EmptyTitle>
+                        <EmptyDescription>
+                            {tab === 'all'
+                                ? 'Compose your first post and it will show up here.'
+                                : 'Nothing in this bucket yet.'}
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             ) : (
                 <div className="overflow-hidden rounded-xl border border-border">
                     {filtered.map((post) => (

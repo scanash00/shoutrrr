@@ -52,10 +52,32 @@ class PostController extends Controller
         $sets = AccountSet::query()->get(['id', 'name'])
             ->map(fn (AccountSet $s): array => ['id' => $s->id, 'name' => $s->name])->all();
 
+        // Per-status tab counts honour the active search/platform/set filters but
+        // not the status filter itself, so each tab shows how many posts of that
+        // status match what's currently being looked at.
+        $byStatus = Post::query()
+            ->where('status', '!=', PostStatus::Deleted->value)
+            ->when($set !== '', fn ($query) => $query->where('account_set_id', $set))
+            ->when($platform !== '', fn ($query) => $query->whereHas('targets',
+                fn ($t) => $t->where('platform', $platform)))
+            ->when($q !== '', fn ($query) => $query->whereLike('base_text', "%{$q}%"))
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $counts = [
+            'all' => (int) $byStatus->sum(),
+            'scheduled' => (int) ($byStatus[PostStatus::Scheduled->value] ?? 0),
+            'draft' => (int) ($byStatus[PostStatus::Draft->value] ?? 0),
+            'published' => (int) ($byStatus[PostStatus::Published->value] ?? 0),
+            'missed' => (int) ($byStatus[PostStatus::Missed->value] ?? 0),
+        ];
+
         return Inertia::render('posts/index', [
             'posts' => Inertia::scroll($page),
             'filters' => ['status' => $status ?: 'all', 'set' => $set, 'platform' => $platform, 'q' => $q],
             'sets' => $sets,
+            'counts' => $counts,
         ]);
     }
 

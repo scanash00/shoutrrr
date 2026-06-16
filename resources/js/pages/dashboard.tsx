@@ -46,7 +46,7 @@ export default function Dashboard({ accounts, sets, limits, posts }: Props) {
     return (
         <>
             <Head title="Dashboard" />
-            <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16 sm:px-6 sm:pt-12">
+            <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
                 <h1 className="text-[26px] leading-tight font-semibold tracking-tight">
                     {timeGreeting()},{' '}
                     <span className="bg-gradient-to-br from-primary to-primary/60 bg-clip-text text-transparent">

@@ -1,4 +1,4 @@
-import { Link, useHttp } from '@inertiajs/react';
+import { Link, router, useHttp } from '@inertiajs/react';
 import { Send } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
 import { cn } from '@/lib/utils';
-import { publish, queue } from '@/routes/posts';
+import { index as postsIndex, publish, queue } from '@/routes/posts';
 
 import type { ScheduleTray } from './composer-state';
 import type { PostView } from './types';
@@ -19,8 +19,6 @@ type Props = {
     onSaveDraft: () => void;
     /** Ensure a persisted post id before publishing; returns the post id. */
     onEnsurePost: () => Promise<string>;
-    /** Adopt the server's post after a successful publish/queue/schedule. */
-    onSubmitted?: (post: PostView) => void;
     /** When in queue mode, true if there is no slot to queue into (no schedule, full, loading, or error). */
     queueDisabled?: boolean;
 };
@@ -31,7 +29,6 @@ export function SubmitBar({
     disabled,
     onSaveDraft,
     onEnsurePost,
-    onSubmitted,
     queueDisabled,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
@@ -59,10 +56,10 @@ export function SubmitBar({
 
         if (tray.mode === 'now') {
             http.transform(() => ({}));
-            const result = await http.post(publish(id).url, {
+            await http.post(publish(id).url, {
+                onSuccess: () => router.visit(postsIndex().url),
                 onNetworkError: () => undefined,
             });
-            onSubmitted?.(result.post);
 
             return;
         }
@@ -70,7 +67,7 @@ export function SubmitBar({
         if (tray.mode === 'queue') {
             http.transform(() => ({}));
             await http.post(queue(id).url, {
-                onSuccess: (data) => onSubmitted?.(data.post),
+                onSuccess: () => router.visit(postsIndex().url),
                 // 422 = no open slot in the workspace posting schedule.
                 onHttpException: (response) => {
                     if (response.status === 422) {
@@ -86,7 +83,7 @@ export function SubmitBar({
         // mode === 'pick' → schedule at the chosen time (existing M2 path).
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
         await http.put(PostScheduleController.update(id).url, {
-            onSuccess: (data) => onSubmitted?.(data.post),
+            onSuccess: () => router.visit(postsIndex().url),
             // 422 = the chosen time is in the past (server guard).
             onHttpException: (response) => {
                 if (response.status === 422) {

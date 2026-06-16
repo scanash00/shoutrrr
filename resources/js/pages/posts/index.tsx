@@ -1,7 +1,8 @@
 import { Head, InfiniteScroll, Link, router, usePage } from '@inertiajs/react';
-import { Filter, X } from 'lucide-react';
+import { Filter, Inbox, Search, SearchX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { FilterTabs } from '@/components/filter-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,9 +15,16 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import { PostRow, type PostRowData } from '@/pages/posts/post-row';
 import { dashboard } from '@/routes';
 import { index as postsRoute } from '@/routes/posts';
@@ -27,6 +35,7 @@ type Props = {
     posts: { data: PostRowData[] };
     filters: { status: string; set: string; platform: string; q: string };
     sets: { id: string; name: string }[];
+    counts: Record<StatusTab, number>;
 };
 
 const STATUS_TABS: { value: StatusTab; label: string }[] = [
@@ -53,7 +62,29 @@ function emptyMessage(status: string, hasActiveFilter: boolean): string {
     return 'No posts yet. Start composing.';
 }
 
-export default function PostsIndex({ posts, filters, sets }: Props) {
+function FilterChip({
+    label,
+    onClear,
+}: {
+    label: string;
+    onClear: () => void;
+}) {
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-2 text-[12px] font-medium text-foreground">
+            {label}
+            <button
+                type="button"
+                aria-label={`Remove ${label} filter`}
+                onClick={onClear}
+                className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            >
+                <X className="size-3" />
+            </button>
+        </span>
+    );
+}
+
+export default function PostsIndex({ posts, filters, sets, counts }: Props) {
     const page = usePage();
     const scrollProps = page.scrollProps?.['posts'];
     const hasMore = !!scrollProps?.nextPage;
@@ -128,13 +159,18 @@ export default function PostsIndex({ posts, filters, sets }: Props) {
     const hasActiveFilter =
         activeFilterCount > 0 || filters.q !== '' || filters.status !== 'all';
 
+    const platformLabel = PLATFORM_OPTIONS.find(
+        (o) => o.value === filters.platform,
+    )?.label;
+    const setLabel = sets.find((s) => s.id === filters.set)?.name;
+
     const items = posts.data;
 
     return (
         <>
             <Head title="Posts" />
 
-            <div className="flex flex-col gap-0">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-0">
                 {/* Command bar */}
                 <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                     <h2 className="mr-2 text-[15px] font-semibold tracking-tight">
@@ -143,11 +179,12 @@ export default function PostsIndex({ posts, filters, sets }: Props) {
 
                     {/* Search */}
                     <div className="relative max-w-xs flex-1">
+                        <Search className="pointer-events-none absolute inset-y-0 left-2.5 my-auto size-3.5 text-muted-foreground" />
                         <Input
                             placeholder="Search posts…"
                             value={localQ}
                             onChange={(e) => handleQChange(e.target.value)}
-                            className="h-8 pr-7 text-sm"
+                            className="h-8 pr-7 pl-8 text-sm"
                         />
                         {localQ && (
                             <button
@@ -232,37 +269,79 @@ export default function PostsIndex({ posts, filters, sets }: Props) {
                 </div>
 
                 {/* Status tabs */}
-                <div className="flex items-center gap-1 border-b border-border px-4 py-2">
-                    {STATUS_TABS.map((tab) => (
-                        <button
-                            key={tab.value}
-                            type="button"
-                            onClick={() => handleStatusChange(tab.value)}
-                            className={cn(
-                                'rounded-full px-3 py-1 text-[13px] transition-colors',
-                                filters.status === tab.value
-                                    ? 'bg-muted font-medium text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground',
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                <div className="border-b border-border px-4 py-2">
+                    <FilterTabs
+                        tabs={STATUS_TABS.map((tab) => ({
+                            ...tab,
+                            count: counts[tab.value],
+                        }))}
+                        value={filters.status}
+                        onChange={(v) => handleStatusChange(v as StatusTab)}
+                    />
                 </div>
+
+                {/* Active filter chips */}
+                {(filters.platform || filters.set) && (
+                    <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2">
+                        <span className="text-[12px] text-muted-foreground">
+                            Filters
+                        </span>
+                        {filters.platform && (
+                            <FilterChip
+                                label={platformLabel ?? filters.platform}
+                                onClear={() =>
+                                    handlePlatformToggle(filters.platform)
+                                }
+                            />
+                        )}
+                        {filters.set && (
+                            <FilterChip
+                                label={setLabel ?? 'Set'}
+                                onClear={() => handleSetChange('all')}
+                            />
+                        )}
+                        <button
+                            type="button"
+                            onClick={() =>
+                                applyFilters({ platform: '', set: '' })
+                            }
+                            className="ml-1 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                            Clear all
+                        </button>
+                    </div>
+                )}
 
                 {/* List body */}
                 <div className="p-4">
                     {items.length === 0 ? (
-                        <div className="flex flex-col items-center gap-3 py-12">
-                            <p className="text-center text-sm text-muted-foreground">
-                                {emptyMessage(filters.status, hasActiveFilter)}
-                            </p>
+                        <Empty>
+                            <EmptyHeader>
+                                <EmptyMedia variant="icon">
+                                    {hasActiveFilter ? <SearchX /> : <Inbox />}
+                                </EmptyMedia>
+                                <EmptyTitle>
+                                    {hasActiveFilter
+                                        ? 'No matching posts'
+                                        : 'No posts yet'}
+                                </EmptyTitle>
+                                <EmptyDescription>
+                                    {emptyMessage(
+                                        filters.status,
+                                        hasActiveFilter,
+                                    )}
+                                </EmptyDescription>
+                            </EmptyHeader>
                             {!hasActiveFilter && (
-                                <Button asChild variant="outline" size="sm">
-                                    <Link href={dashboard().url}>New post</Link>
-                                </Button>
+                                <EmptyContent>
+                                    <Button asChild variant="outline" size="sm">
+                                        <Link href={dashboard().url}>
+                                            New post
+                                        </Link>
+                                    </Button>
+                                </EmptyContent>
                             )}
-                        </div>
+                        </Empty>
                     ) : (
                         <InfiniteScroll
                             data="posts"

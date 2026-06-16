@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import { ArrowLeft, PenLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
@@ -19,15 +20,29 @@ export default function ComposePage({
     return (
         <>
             <Head title="Compose" />
-            <div className="mx-auto w-full max-w-[820px] px-4 pt-6 pb-16 sm:px-6">
-                <div className="sticky top-0 z-10 mb-5 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-md">
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href={postsRoute().url}>← Back to drafts</Link>
+            <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
+                <div className="sticky top-0 z-10 mb-5 flex items-center gap-2 border-b border-border bg-background/85 px-2 py-2 backdrop-blur-md">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                    >
+                        <Link href={postsRoute().url}>
+                            <ArrowLeft className="size-4" />
+                            Drafts
+                        </Link>
                     </Button>
-                    <div className="truncate text-[13px] tracking-tight text-muted-foreground">
-                        {title || 'Untitled draft'}
+                    <div className="h-4 w-px bg-border" aria-hidden />
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <PenLine
+                            className="size-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden
+                        />
+                        <span className="truncate text-[13px] font-medium tracking-tight">
+                            {title || 'Untitled draft'}
+                        </span>
                     </div>
-                    <div className="w-24" />
                 </div>
 
                 <Composer

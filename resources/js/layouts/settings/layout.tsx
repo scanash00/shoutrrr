@@ -45,7 +45,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     ];
 
     return (
-        <div className="px-4 py-6">
+        <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
             <Heading
                 title="Settings"
                 description="Manage your profile and account settings"

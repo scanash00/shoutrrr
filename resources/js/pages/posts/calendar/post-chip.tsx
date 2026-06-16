@@ -1,6 +1,9 @@
 import { useDraggable } from '@dnd-kit/core';
-import type { CSSProperties } from 'react';
+import { router } from '@inertiajs/react';
+import type { CSSProperties, MouseEvent } from 'react';
 
+import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
+import { PlatformGlyph } from '@/components/platform-glyph';
 import { useSchedulingTimezone } from '@/hooks/use-scheduling-timezone';
 import { toUserTz } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
@@ -54,6 +57,7 @@ export function PostChip({
         ? toUserTz(post.scheduled_at, tz).format('h:mma')
         : '';
     const tone = toneStyles[toneOf(post.status)];
+    const platform = (post.platforms ?? [])[0];
 
     const style: CSSProperties = transform
         ? {
@@ -62,12 +66,22 @@ export function PostChip({
           }
         : {};
 
+    function openPost(e: MouseEvent) {
+        // Ignore the synthetic click dnd fires at the end of a drag.
+        if (isDragging) {
+            return;
+        }
+        e.stopPropagation();
+        router.visit(ComposerController.show(post.id).url);
+    }
+
     return (
         <div
             ref={setNodeRef}
             style={style}
             {...(draggable ? listeners : {})}
             {...attributes}
+            onClick={openPost}
             className={cn(
                 'group/chip relative flex h-5 items-center gap-1.5 truncate rounded-sm pr-1.5 pl-2 text-[10.5px] font-medium tabular-nums transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
@@ -75,7 +89,7 @@ export function PostChip({
                 tone.pulse && 'animate-pulse',
                 draggable
                     ? 'cursor-grab active:cursor-grabbing'
-                    : 'cursor-default',
+                    : 'cursor-pointer',
                 isDragging && 'opacity-50',
             )}
             title={post.base_text}
@@ -87,7 +101,14 @@ export function PostChip({
                     tone.strip,
                 )}
             />
-            {when && <span className="opacity-75">{when}</span>}
+            {platform && (
+                <PlatformGlyph
+                    platform={platform}
+                    size={10}
+                    className="shrink-0 opacity-80"
+                />
+            )}
+            {when && <span className="shrink-0 opacity-75">{when}</span>}
             <span className="truncate">{post.base_text || 'Untitled'}</span>
         </div>
     );

@@ -15,9 +15,9 @@ import ConnectedAccountController from '@/actions/App/Http/Controllers/Connected
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { PlatformGlyph } from '@/components/platform-glyph';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Collapsible,
@@ -33,8 +33,29 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    Empty,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import type { PlatformName } from '@/pages/compose/types';
+
+/** Per-platform brand accent for the glyph tile (encodes which network it is). */
+const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
+    x: { tile: 'bg-foreground/5', glyph: 'text-foreground' },
+    linkedin: {
+        tile: 'bg-blue-500/10',
+        glyph: 'text-blue-600 dark:text-blue-400',
+    },
+    bluesky: { tile: 'bg-sky-500/10', glyph: 'text-sky-500' },
+};
+
+const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
 
 type Account = {
     id: string;
@@ -287,6 +308,129 @@ function ReconnectBlueskyDialog({ account }: { account: Account }) {
     );
 }
 
+function AccountCard({
+    account,
+    canManage,
+    onReconnectOAuth,
+    onDisconnect,
+}: {
+    account: Account;
+    canManage: boolean;
+    onReconnectOAuth: (account: Account) => void;
+    onDisconnect: (account: Account) => void;
+}) {
+    const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
+    const needsAttention = account.status !== 'active';
+    const name = account.display_name ?? account.handle;
+
+    return (
+        <div
+            className={cn(
+                'flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors',
+                needsAttention ? 'border-destructive/40' : 'border-border',
+            )}
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative shrink-0">
+                        <Avatar className="size-10">
+                            <AvatarImage
+                                src={account.avatar_url ?? undefined}
+                                alt={account.handle}
+                            />
+                            <AvatarFallback className="text-[13px] font-medium">
+                                {name
+                                    .replace(/^@/, '')
+                                    .slice(0, 1)
+                                    .toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span
+                            className={cn(
+                                'absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full ring-2 ring-card',
+                                brand.tile,
+                                brand.glyph,
+                            )}
+                        >
+                            <PlatformGlyph
+                                platform={account.platform as PlatformName}
+                                size={11}
+                            />
+                        </span>
+                    </div>
+                    <div className="min-w-0">
+                        <p className="truncate text-[14px] font-medium">
+                            {name}
+                        </p>
+                        <p className="truncate text-[12.5px] text-muted-foreground">
+                            {account.handle}
+                        </p>
+                    </div>
+                </div>
+
+                <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium">
+                    <span
+                        className={cn(
+                            'size-1.5 rounded-full',
+                            needsAttention
+                                ? 'bg-destructive'
+                                : 'bg-emerald-500',
+                        )}
+                    />
+                    <span
+                        className={
+                            needsAttention
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
+                        }
+                    >
+                        {needsAttention ? account.status_label : 'Connected'}
+                    </span>
+                </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-muted-foreground">
+                <span>{account.platform_label}</span>
+                {account.connected_by && (
+                    <>
+                        <span aria-hidden>·</span>
+                        <span className="truncate">
+                            by {account.connected_by}
+                        </span>
+                    </>
+                )}
+            </div>
+
+            {canManage && (
+                <div className="mt-1 flex items-center gap-2 border-t border-border pt-3">
+                    {account.auth_method === 'app_password' ? (
+                        <ReconnectBlueskyDialog account={account} />
+                    ) : (
+                        <Button
+                            variant={needsAttention ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-8"
+                            onClick={() => onReconnectOAuth(account)}
+                        >
+                            <RefreshCw className="size-4" />
+                            Reconnect
+                        </Button>
+                    )}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto h-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => onDisconnect(account)}
+                    >
+                        <Trash2 className="size-4" />
+                        Disconnect
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function ConnectedAccounts({
     accounts,
     capabilities,
@@ -313,8 +457,11 @@ export default function ConnectedAccounts({
     const connectError =
         flash?.error && flash.error !== dismissedError ? flash.error : null;
 
+    const connectedCount = accounts.filter((a) => a.status === 'active').length;
+    const attentionCount = accounts.length - connectedCount;
+
     return (
-        <div className="flex flex-col gap-6 p-4">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
             <Head title="Accounts" />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -342,88 +489,56 @@ export default function ConnectedAccounts({
             )}
 
             {accounts.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-md border border-dashed p-10 text-center">
-                    <Plug className="size-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                        No accounts connected yet.
-                        {canManage
-                            ? ' Connect X, LinkedIn, or Bluesky to get started.'
-                            : ' Ask an admin to connect one.'}
-                    </p>
-                </div>
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Plug />
+                        </EmptyMedia>
+                        <EmptyTitle>No accounts connected</EmptyTitle>
+                        <EmptyDescription>
+                            {canManage
+                                ? 'Connect X, LinkedIn, or Bluesky to get started.'
+                                : 'Ask an admin to connect one.'}
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             ) : (
-                <div className="grid gap-3">
-                    {accounts.map((account) => (
-                        <div
-                            key={account.id}
-                            className="flex flex-col gap-4 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                            <div className="flex min-w-0 items-center gap-3">
-                                <Avatar>
-                                    <AvatarImage
-                                        src={account.avatar_url ?? undefined}
-                                        alt={account.handle}
-                                    />
-                                    <AvatarFallback>
-                                        {platformIcon(account.platform)}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="truncate font-medium">
-                                            {account.display_name ??
-                                                account.handle}
-                                        </span>
-                                        <Badge
-                                            variant={
-                                                account.status === 'active'
-                                                    ? 'secondary'
-                                                    : 'destructive'
-                                            }
-                                        >
-                                            {account.status_label}
-                                        </Badge>
-                                    </div>
-                                    <p className="truncate text-sm text-muted-foreground">
-                                        {account.platform_label} &middot;{' '}
-                                        {account.handle}
-                                        {account.connected_by
-                                            ? ` - by ${account.connected_by}`
-                                            : ''}
-                                    </p>
-                                </div>
-                            </div>
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4 text-[12.5px]">
+                        <span className="flex items-center gap-1.5">
+                            <span className="size-1.5 rounded-full bg-emerald-500" />
+                            <span className="font-medium tabular-nums">
+                                {connectedCount}
+                            </span>
+                            <span className="text-muted-foreground">
+                                connected
+                            </span>
+                        </span>
+                        {attentionCount > 0 && (
+                            <span className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-destructive" />
+                                <span className="font-medium text-destructive tabular-nums">
+                                    {attentionCount}
+                                </span>
+                                <span className="text-muted-foreground">
+                                    need{attentionCount === 1 ? 's' : ''}{' '}
+                                    attention
+                                </span>
+                            </span>
+                        )}
+                    </div>
 
-                            {canManage && (
-                                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                                    {account.auth_method === 'app_password' ? (
-                                        <ReconnectBlueskyDialog
-                                            account={account}
-                                        />
-                                    ) : (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                                reconnectOAuth(account)
-                                            }
-                                        >
-                                            <RefreshCw className="size-4" />
-                                            Reconnect
-                                        </Button>
-                                    )}
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => disconnect(account)}
-                                    >
-                                        <Trash2 className="size-4 text-destructive" />
-                                        Disconnect
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {accounts.map((account) => (
+                            <AccountCard
+                                key={account.id}
+                                account={account}
+                                canManage={canManage}
+                                onReconnectOAuth={reconnectOAuth}
+                                onDisconnect={disconnect}
+                            />
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

@@ -61,8 +61,10 @@ export default function CalendarIndex({ yyyymm, view, posts }: Props) {
 
     const http = useHttp<Record<string, never>, Record<string, never>>({});
 
+    // A small activation distance lets a plain click through to the chip's
+    // open-post handler; only a >4px drag starts a reschedule.
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
         useSensor(KeyboardSensor),
     );
 
@@ -229,7 +231,7 @@ export default function CalendarIndex({ yyyymm, view, posts }: Props) {
         <>
             <Head title="Calendar" />
 
-            <div className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-16 sm:px-6">
+            <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
                 <CalendarHeader
                     label={label}
                     view={view}

@@ -1,98 +1,73 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
-    BookOpen,
     CalendarDays,
     FileText,
-    FolderGit2,
-    LayoutGrid,
     ListChecks,
+    Pencil,
     Settings,
     Share2,
+    type LucideIcon,
 } from 'lucide-react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
-import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
+import { Kbd } from '@/components/ui/kbd';
 import {
     Sidebar,
     SidebarContent,
     SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { WorkspaceSelector } from '@/components/workspace-selector';
+import { useCurrentUrl } from '@/hooks/use-current-url';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import { index as calendarRoute } from '@/routes/calendar';
 import { index as postsRoute } from '@/routes/posts';
-import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Posts',
-        href: postsRoute(),
-        icon: FileText,
-    },
-    {
-        title: 'Calendar',
-        href: calendarRoute(),
-        icon: CalendarDays,
-    },
+type NavItem = {
+    title: string;
+    href: NonNullable<Parameters<typeof Link>[0]['href']>;
+    icon: LucideIcon;
+};
+
+const postsNavItems: NavItem[] = [
+    { title: 'Posts', href: postsRoute(), icon: FileText },
+    { title: 'Calendar', href: calendarRoute(), icon: CalendarDays },
     {
         title: 'Queue',
         href: PostingScheduleController.show(),
         icon: ListChecks,
     },
-    {
-        title: 'Accounts',
-        href: accountsRoute(),
-        icon: Share2,
-    },
-];
-
-const workspaceSettingsNavItem: NavItem = {
-    title: 'Workspace Settings',
-    href: WorkspaceSettingsController.showOverview(),
-    icon: Settings,
-};
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
-        target: '_blank',
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-        target: '_blank',
-    },
+    { title: 'Accounts', href: accountsRoute(), icon: Share2 },
 ];
 
 export function AppSidebar() {
     const { workspaces } = usePage().props;
+    const { isCurrentUrl } = useCurrentUrl();
+    const { state } = useSidebar();
+    const collapsed = state === 'collapsed';
 
+    const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
 
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+            <SidebarHeader className="gap-1.5">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
+                        <SidebarMenuButton asChild className="h-8">
+                            <Link href={composeHref} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -101,19 +76,93 @@ export function AppSidebar() {
                 <WorkspaceSelector />
             </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
+            <SidebarContent className="gap-0">
+                <SidebarGroup className="border-b border-sidebar-border">
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    tooltip="Compose new post"
+                                    isActive={isCurrentUrl(composeHref)}
+                                    className={cn(
+                                        'h-9 justify-between gap-2 bg-primary font-medium text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-all',
+                                        'hover:bg-primary/90 hover:text-primary-foreground hover:shadow active:scale-[0.98]',
+                                        'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground',
+                                    )}
+                                >
+                                    <Link href={composeHref} prefetch>
+                                        <span className="flex items-center gap-2">
+                                            <span className="flex size-5 items-center justify-center rounded-md bg-primary-foreground/15 [&>svg]:size-3.5">
+                                                <Pencil aria-hidden="true" />
+                                            </span>
+                                            {!collapsed && (
+                                                <span>Compose post</span>
+                                            )}
+                                        </span>
+                                        {!collapsed && (
+                                            <Kbd className="bg-primary-foreground/15 text-primary-foreground">
+                                                ⌘N
+                                            </Kbd>
+                                        )}
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarGroup>
+                    <SidebarGroupLabel>Posts</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {postsNavItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        tooltip={item.title}
+                                        isActive={isCurrentUrl(item.href)}
+                                    >
+                                        <Link href={item.href} prefetch>
+                                            <item.icon aria-hidden="true" />
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                {showWorkspaceSettings && (
+                    <SidebarGroup>
+                        <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        asChild
+                                        tooltip="Settings"
+                                        isActive={isCurrentUrl(
+                                            WorkspaceSettingsController.showOverview(),
+                                        )}
+                                    >
+                                        <Link
+                                            href={WorkspaceSettingsController.showOverview()}
+                                            prefetch
+                                        >
+                                            <Settings aria-hidden="true" />
+                                            <span>Settings</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter
-                    items={
-                        showWorkspaceSettings
-                            ? [workspaceSettingsNavItem, ...footerNavItems]
-                            : footerNavItems
-                    }
-                    className="mt-auto"
-                />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

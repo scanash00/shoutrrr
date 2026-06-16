@@ -5,6 +5,7 @@ import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerCon
 import { PlatformGlyph } from '@/components/platform-glyph';
 import { Badge } from '@/components/ui/badge';
 import { dayjs } from '@/lib/datetime/dayjs';
+import { postStatusMeta } from '@/lib/posts/status';
 import { cn } from '@/lib/utils';
 import {
     type ChipTarget,
@@ -31,51 +32,6 @@ export type PostRowData = {
     targets: ChipTarget[];
 };
 
-// Status badge styling (semantic shadcn classes + tinted overrides where shadcn
-// doesn't ship an info/success/warning variant).
-const STATUS_META: Record<
-    PostStatus,
-    {
-        variant: 'secondary' | 'outline' | 'destructive' | null;
-        className?: string;
-        label: string;
-    }
-> = {
-    draft: { variant: 'secondary', label: 'Draft' },
-    scheduled: {
-        variant: null,
-        className:
-            'border-transparent bg-blue-500/10 text-blue-600 dark:text-blue-400',
-        label: 'Scheduled',
-    },
-    publishing: {
-        variant: null,
-        className:
-            'border-transparent bg-blue-500/10 text-blue-600 dark:text-blue-400',
-        label: 'Publishing',
-    },
-    published: {
-        variant: null,
-        className:
-            'border-transparent bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-        label: 'Published',
-    },
-    partial: {
-        variant: null,
-        className:
-            'border-transparent bg-amber-500/10 text-amber-600 dark:text-amber-500',
-        label: 'Partial',
-    },
-    failed: { variant: 'destructive', label: 'Failed' },
-    missed: {
-        variant: null,
-        className:
-            'border-transparent bg-slate-500/10 text-slate-600 dark:text-slate-400',
-        label: 'Missed',
-    },
-    deleted: { variant: 'secondary', label: 'Deleted' },
-};
-
 function formatWhen(dateStr: string): { when: string; time: string } {
     const d = dayjs(dateStr);
     const startOfToday = dayjs().startOf('day');
@@ -95,15 +51,8 @@ function formatWhen(dateStr: string): { when: string; time: string } {
 }
 
 function StatusBadge({ status }: { status: PostStatus }) {
-    const meta = STATUS_META[status] ?? STATUS_META.draft;
-    return (
-        <Badge
-            variant={meta.variant ?? 'outline'}
-            className={cn(meta.className)}
-        >
-            {meta.label}
-        </Badge>
-    );
+    const meta = postStatusMeta[status] ?? postStatusMeta.draft;
+    return <Badge variant={meta.variant}>{meta.label}</Badge>;
 }
 
 export function PostRow({ post }: { post: PostRowData }) {

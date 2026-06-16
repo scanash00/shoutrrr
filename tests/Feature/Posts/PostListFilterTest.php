@@ -52,6 +52,21 @@ it('filters by status tab', function (): void {
             ->where('posts.data.0.status', 'scheduled'));
 });
 
+it('exposes per-status tab counts that exclude deleted', function (): void {
+    makePost($this->workspace, $this->user, PostStatus::Draft);
+    makePost($this->workspace, $this->user, PostStatus::Draft);
+    makePost($this->workspace, $this->user, PostStatus::Scheduled);
+    makePost($this->workspace, $this->user, PostStatus::Deleted);
+
+    $this->actingAs($this->user)
+        ->get(route('posts.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('counts.all', 3)
+            ->where('counts.draft', 2)
+            ->where('counts.scheduled', 1)
+            ->where('counts.published', 0));
+});
+
 it('filters by text query on base_text', function (): void {
     Post::factory()->for($this->workspace)->create(['author_id' => $this->user->id, 'base_text' => 'launch announcement']);
     Post::factory()->for($this->workspace)->create(['author_id' => $this->user->id, 'base_text' => 'weekly recap']);

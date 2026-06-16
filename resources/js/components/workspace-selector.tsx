@@ -15,6 +15,7 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { CreateWorkspaceDialog } from '@/components/workspace/create-workspace-dialog';
+import { useInitials } from '@/hooks/use-initials';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { switchMethod } from '@/routes/workspaces';
 
@@ -22,6 +23,7 @@ export function WorkspaceSelector() {
     const { workspaces } = usePage().props;
     const { state } = useSidebar();
     const isMobile = useIsMobile();
+    const getInitials = useInitials();
     const [loading, setLoading] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -55,18 +57,23 @@ export function WorkspaceSelector() {
                                 disabled={loading}
                                 className="data-[state=open]:bg-sidebar-accent"
                             >
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sidebar-accent text-[12.5px] font-semibold text-sidebar-accent-foreground">
                                     {current?.logo ? (
                                         <img
                                             alt={current.name}
                                             src={current.logo}
-                                            className="size-8 rounded-lg"
+                                            className="size-8 rounded-lg object-cover"
                                         />
+                                    ) : current?.name ? (
+                                        getInitials(current.name)
                                     ) : (
                                         <Users className="size-4" />
                                     )}
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
+                                    <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                                        Workspace
+                                    </span>
                                     <span className="truncate font-medium">
                                         {current?.name ?? 'Select workspace'}
                                     </span>
