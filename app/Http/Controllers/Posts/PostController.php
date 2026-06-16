@@ -36,19 +36,6 @@ class PostController extends Controller
         $platform = $request->string('platform')->toString();
         $q = $request->string('q')->toString();
 
-        $page = Post::query()
-            ->with(['author:id,name', 'targets'])
-            ->where('status', '!=', PostStatus::Deleted->value)
-            ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
-            ->when($set !== '', fn ($query) => $query->where('account_set_id', $set))
-            ->when($platform !== '', fn ($query) => $query->whereHas('targets',
-                fn ($t) => $t->where('platform', $platform)))
-            ->when($q !== '', fn ($query) => $query->whereLike('base_text', "%{$q}%"))
-            ->orderByRaw('COALESCE(scheduled_at, created_at) DESC')
-            ->cursorPaginate(20)
-            ->withQueryString()
-            ->through(fn (Post $post): array => PostListItem::make($post));
-
         $sets = AccountSet::query()->get(['id', 'name'])
             ->map(fn (AccountSet $s): array => ['id' => $s->id, 'name' => $s->name])->all();
 
@@ -74,7 +61,18 @@ class PostController extends Controller
         ];
 
         return Inertia::render('posts/index', [
-            'posts' => Inertia::scroll($page),
+            'posts' => Inertia::scroll(fn () => Post::query()
+                ->with(['author:id,name', 'targets'])
+                ->where('status', '!=', PostStatus::Deleted->value)
+                ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
+                ->when($set !== '', fn ($query) => $query->where('account_set_id', $set))
+                ->when($platform !== '', fn ($query) => $query->whereHas('targets',
+                    fn ($t) => $t->where('platform', $platform)))
+                ->when($q !== '', fn ($query) => $query->whereLike('base_text', "%{$q}%"))
+                ->orderByRaw('COALESCE(scheduled_at, created_at) DESC')
+                ->cursorPaginate(20)
+                ->withQueryString()
+                ->through(fn (Post $post): array => PostListItem::make($post)))->defer(),
             'filters' => ['status' => $status ?: 'all', 'set' => $set, 'platform' => $platform, 'q' => $q],
             'sets' => $sets,
             'counts' => $counts,

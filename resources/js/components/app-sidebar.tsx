@@ -67,7 +67,11 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild className="h-8">
-                            <Link href={composeHref} prefetch>
+                            <Link
+                                href={composeHref}
+                                prefetch={['mount', 'hover']}
+                                cacheFor={['30s', '1m']}
+                            >
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -91,7 +95,11 @@ export function AppSidebar() {
                                         'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground',
                                     )}
                                 >
-                                    <Link href={composeHref} prefetch>
+                                    <Link
+                                        href={composeHref}
+                                        prefetch={['mount', 'hover']}
+                                        cacheFor={['30s', '1m']}
+                                    >
                                         <span className="flex items-center gap-2">
                                             <span className="flex size-5 items-center justify-center rounded-md bg-primary-foreground/15 [&>svg]:size-3.5">
                                                 <Pencil aria-hidden="true" />
@@ -116,20 +124,31 @@ export function AppSidebar() {
                     <SidebarGroupLabel>Posts</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {postsNavItems.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        tooltip={item.title}
-                                        isActive={isCurrentUrl(item.href)}
-                                    >
-                                        <Link href={item.href} prefetch>
-                                            <item.icon aria-hidden="true" />
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
+                            {postsNavItems.map((item) => {
+                                const cacheFor: [string, string] =
+                                    item.title === 'Calendar' ||
+                                    item.title === 'Queue'
+                                        ? ['10s', '30s']
+                                        : ['30s', '1m'];
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            tooltip={item.title}
+                                            isActive={isCurrentUrl(item.href)}
+                                        >
+                                            <Link
+                                                href={item.href}
+                                                prefetch={['mount', 'hover']}
+                                                cacheFor={cacheFor}
+                                            >
+                                                <item.icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
@@ -149,7 +168,8 @@ export function AppSidebar() {
                                     >
                                         <Link
                                             href={WorkspaceSettingsController.showOverview()}
-                                            prefetch
+                                            prefetch={['mount', 'hover']}
+                                            cacheFor={['30s', '1m']}
                                         >
                                             <Settings aria-hidden="true" />
                                             <span>Settings</span>

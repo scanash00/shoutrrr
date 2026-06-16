@@ -216,7 +216,7 @@ members.form = membersForm
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::invite
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:112
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:110
 * @route '/settings/workspace/invite'
 */
 export const invite = (options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -231,7 +231,7 @@ invite.definition = {
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::invite
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:112
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:110
 * @route '/settings/workspace/invite'
 */
 invite.url = (options?: RouteQueryOptions) => {
@@ -240,7 +240,7 @@ invite.url = (options?: RouteQueryOptions) => {
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::invite
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:112
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:110
 * @route '/settings/workspace/invite'
 */
 invite.post = (options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -250,7 +250,7 @@ invite.post = (options?: RouteQueryOptions): RouteDefinition<'post'> => ({
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::invite
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:112
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:110
 * @route '/settings/workspace/invite'
 */
 const inviteForm = (options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -260,7 +260,7 @@ const inviteForm = (options?: RouteQueryOptions): RouteFormDefinition<'post'> =>
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::invite
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:112
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:110
 * @route '/settings/workspace/invite'
 */
 inviteForm.post = (options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({

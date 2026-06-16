@@ -37,8 +37,9 @@ it('lists workspace posts and excludes deleted', function (): void {
         ->get(route('posts.index'))
         ->assertInertia(fn ($page) => $page
             ->component('posts/index')
-            ->has('posts.data', 1)
-            ->where('posts.data.0.status', 'draft'));
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('posts.data', 1)
+                ->where('posts.data.0.status', 'draft')));
 });
 
 it('filters by status tab', function (): void {
@@ -48,8 +49,9 @@ it('filters by status tab', function (): void {
     $this->actingAs($this->user)
         ->get(route('posts.index', ['status' => 'scheduled']))
         ->assertInertia(fn ($page) => $page
-            ->has('posts.data', 1)
-            ->where('posts.data.0.status', 'scheduled'));
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('posts.data', 1)
+                ->where('posts.data.0.status', 'scheduled')));
 });
 
 it('exposes per-status tab counts that exclude deleted', function (): void {
@@ -73,6 +75,8 @@ it('filters by text query on base_text', function (): void {
 
     $this->actingAs($this->user)
         ->get(route('posts.index', ['q' => 'launch']))
-        ->assertInertia(fn ($page) => $page->has('posts.data', 1)
-            ->where('posts.data.0.base_text', 'launch announcement'));
+        ->assertInertia(fn ($page) => $page
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('posts.data', 1)
+                ->where('posts.data.0.base_text', 'launch announcement')));
 });

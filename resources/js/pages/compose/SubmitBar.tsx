@@ -9,6 +9,11 @@ import { cn } from '@/lib/utils';
 import { index as postsIndex, publish, queue } from '@/routes/posts';
 
 import type { ScheduleTray } from './composer-state';
+import {
+    OPTIMISTIC_PUBLISH,
+    OPTIMISTIC_SCHEDULE,
+    type OptimisticSubmit,
+} from './publish-status';
 import type { PostView } from './types';
 
 type Props = {
@@ -21,6 +26,13 @@ type Props = {
     onEnsurePost: () => Promise<string>;
     /** When in queue mode, true if there is no slot to queue into (no schedule, full, loading, or error). */
     queueDisabled?: boolean;
+    /**
+     * Flip the live status chips to their in-flight state instantly; returns a
+     * `revert` to restore the prior snapshot if the request fails.
+     */
+    onOptimisticSubmit: (optimistic: OptimisticSubmit) => () => void;
+    /** Adopt the server's post after a successful publish/queue/schedule. */
+    onServerPost: (post: PostView) => void;
 };
 
 export function SubmitBar({
@@ -30,6 +42,8 @@ export function SubmitBar({
     onSaveDraft,
     onEnsurePost,
     queueDisabled,
+    onOptimisticSubmit,
+    onServerPost,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
@@ -55,42 +69,59 @@ export function SubmitBar({
         }
 
         if (tray.mode === 'now') {
+            // Flip the chips to "Publishing" instantly; revert if the call fails.
+            const revert = onOptimisticSubmit(OPTIMISTIC_PUBLISH);
             http.transform(() => ({}));
             await http.post(publish(id).url, {
-                onSuccess: () => router.visit(postsIndex().url),
-                onNetworkError: () => undefined,
+                onSuccess: ({ post }) => {
+                    onServerPost(post);
+                    router.visit(postsIndex().url);
+                },
+                onHttpException: revert,
+                onNetworkError: revert,
             });
 
             return;
         }
 
         if (tray.mode === 'queue') {
+            // Flip the chips to "Queued" instantly; revert if the call fails.
+            const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
             http.transform(() => ({}));
             await http.post(queue(id).url, {
-                onSuccess: () => router.visit(postsIndex().url),
+                onSuccess: ({ post }) => {
+                    onServerPost(post);
+                    router.visit(postsIndex().url);
+                },
                 // 422 = no open slot in the workspace posting schedule.
                 onHttpException: (response) => {
+                    revert();
                     if (response.status === 422) {
                         setNoSlot(true);
                     }
                 },
-                onNetworkError: () => undefined,
+                onNetworkError: revert,
             });
 
             return;
         }
 
         // mode === 'pick' → schedule at the chosen time (existing M2 path).
+        const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
         await http.put(PostScheduleController.update(id).url, {
-            onSuccess: () => router.visit(postsIndex().url),
+            onSuccess: ({ post }) => {
+                onServerPost(post);
+                router.visit(postsIndex().url);
+            },
             // 422 = the chosen time is in the past (server guard).
             onHttpException: (response) => {
+                revert();
                 if (response.status === 422) {
                     setPastTime(true);
                 }
             },
-            onNetworkError: () => undefined,
+            onNetworkError: revert,
         });
     }
 

@@ -193,6 +193,7 @@ function TimezoneSection({
             { timezone: value },
             {
                 preserveScroll: true,
+                optimistic: () => ({ timezone: value }),
                 onSuccess: () => toast.success('Posting timezone saved.'),
                 onError: () => toast.error('Could not save the timezone.'),
                 onFinish: () => setSaving(false),

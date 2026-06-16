@@ -1,10 +1,11 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Deferred, Head, Link, router } from '@inertiajs/react';
 import { CalendarClock, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
+import { QueueSkeleton } from '@/components/skeletons/queue-skeleton';
 import { Button } from '@/components/ui/button';
 import {
     Popover,
@@ -37,7 +38,7 @@ import {
 
 type Props = {
     timezone: string;
-    slots: Slot[];
+    slots?: Slot[];
     canManage: boolean;
 };
 
@@ -46,15 +47,39 @@ export default function QueueIndex({ timezone, slots, canManage }: Props) {
         <>
             <Head title="Queue" />
 
-            <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
-                <ScheduleEditor
-                    key={normalizeSlots(slots)
-                        .map((s) => `${s.weekday}:${s.hour}:${s.minute}`)
-                        .join(',')}
-                    initialSlots={normalizeSlots(slots)}
-                    timezone={timezone}
-                    canManage={canManage}
-                />
+            <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pt-6 pb-16 sm:px-6">
+                {/* Header — slots-independent, paints immediately */}
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-[22px] leading-tight font-semibold tracking-tight">
+                        Posting queue
+                    </h1>
+                    <p className="text-[13px] text-muted-foreground">
+                        Queued posts go out at these times each week, in{' '}
+                        <span className="font-medium text-foreground">
+                            {timezone}
+                        </span>{' '}
+                        ·{' '}
+                        <Link
+                            href={
+                                WorkspaceSettingsController.showOverview().url
+                            }
+                            className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                        >
+                            change
+                        </Link>
+                    </p>
+                </div>
+
+                <Deferred data="slots" fallback={<QueueSkeleton />}>
+                    <ScheduleEditor
+                        key={normalizeSlots(slots ?? [])
+                            .map((s) => `${s.weekday}:${s.hour}:${s.minute}`)
+                            .join(',')}
+                        initialSlots={normalizeSlots(slots ?? [])}
+                        timezone={timezone}
+                        canManage={canManage}
+                    />
+                </Deferred>
             </div>
         </>
     );
@@ -160,26 +185,6 @@ function ScheduleEditor({
 
     return (
         <div className="space-y-5">
-            {/* Header */}
-            <div className="flex flex-col gap-1">
-                <h1 className="text-[22px] leading-tight font-semibold tracking-tight">
-                    Posting queue
-                </h1>
-                <p className="text-[13px] text-muted-foreground">
-                    Queued posts go out at these times each week, in{' '}
-                    <span className="font-medium text-foreground">
-                        {timezone}
-                    </span>{' '}
-                    ·{' '}
-                    <Link
-                        href={WorkspaceSettingsController.showOverview().url}
-                        className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
-                    >
-                        change
-                    </Link>
-                </p>
-            </div>
-
             {/* Cadence overview — the week's rhythm at a glance + next post */}
             <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:p-5">
                 <div className="flex items-end gap-2">

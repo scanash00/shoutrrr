@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
     anyTargetActive,
+    applyOptimisticSubmit,
     failedTargets,
     isPostTerminal,
+    OPTIMISTIC_PUBLISH,
+    OPTIMISTIC_SCHEDULE,
     targetStatusMeta,
 } from '../publish-status';
 import type { PostView, TargetStatus, TargetView } from '../types';
@@ -75,6 +78,69 @@ describe('failedTargets', () => {
             target('c', 'failed'),
         ];
         expect(failedTargets(ts).map((t) => t.id)).toEqual(['b', 'c']);
+    });
+});
+
+describe('applyOptimisticSubmit', () => {
+    it('flips a draft post and pending targets to publishing on Publish now', () => {
+        const before = post([target('a', 'pending'), target('b', 'pending')]);
+        before.status = 'draft';
+
+        const after = applyOptimisticSubmit(before, OPTIMISTIC_PUBLISH);
+
+        expect(after.status).toBe('publishing');
+        expect(after.targets.map((t) => t.status)).toEqual([
+            'publishing',
+            'publishing',
+        ]);
+    });
+
+    it('flips to scheduled/pending on queue or schedule', () => {
+        const before = post([target('a', 'failed')]);
+        before.status = 'draft';
+
+        const after = applyOptimisticSubmit(before, OPTIMISTIC_SCHEDULE);
+
+        expect(after.status).toBe('scheduled');
+        expect(after.targets[0].status).toBe('pending');
+    });
+
+    it('clears a prior error so a fresh attempt loses the stale failure', () => {
+        const before = post([target('a', 'failed')]);
+        before.targets[0].error_kind = 'rate_limited';
+        before.targets[0].error_message = 'Too many requests';
+
+        const after = applyOptimisticSubmit(before, OPTIMISTIC_PUBLISH);
+
+        expect(after.targets[0].error_kind).toBeNull();
+        expect(after.targets[0].error_message).toBeNull();
+    });
+
+    it('leaves terminal targets (published/deleting/deleted) untouched', () => {
+        const before = post([
+            target('a', 'published'),
+            target('b', 'deleting'),
+            target('c', 'deleted'),
+            target('d', 'pending'),
+        ]);
+
+        const after = applyOptimisticSubmit(before, OPTIMISTIC_PUBLISH);
+
+        expect(after.targets.map((t) => t.status)).toEqual([
+            'published',
+            'deleting',
+            'deleted',
+            'publishing',
+        ]);
+    });
+
+    it('does not mutate the input (revert is just restoring the prior view)', () => {
+        const before = post([target('a', 'pending')]);
+        const snapshot = structuredClone(before);
+
+        applyOptimisticSubmit(before, OPTIMISTIC_PUBLISH);
+
+        expect(before).toEqual(snapshot);
     });
 });
 

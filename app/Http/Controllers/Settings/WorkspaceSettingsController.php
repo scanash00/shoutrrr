@@ -81,17 +81,6 @@ class WorkspaceSettingsController extends Controller
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
 
-        $members = $workspace->members()->with('user')->get()->map(fn (WorkspaceMembership $m) => [
-            'id' => $m->id,
-            'user_id' => $m->user_id,
-            'name' => $m->user->name,
-            'email' => $m->user->email,
-            'avatar' => "https://api.dicebear.com/9.x/glass/svg?seed={$m->user_id}",
-            'role' => $m->role->value,
-            'is_owner' => $m->isOwner(),
-            'created_at' => $m->created_at,
-        ]);
-
         $pending = $workspace->invitations()->pending()->with('inviter')->get()->map(fn (WorkspaceInvitation $i) => [
             'id' => $i->id,
             'email' => $i->email,
@@ -102,7 +91,16 @@ class WorkspaceSettingsController extends Controller
         ]);
 
         return Inertia::render('settings/workspace/members', [
-            'members' => $members,
+            'members' => Inertia::defer(fn (): array => $workspace->members()->with('user')->get()->map(fn (WorkspaceMembership $m) => [
+                'id' => $m->id,
+                'user_id' => $m->user_id,
+                'name' => $m->user->name,
+                'email' => $m->user->email,
+                'avatar' => "https://api.dicebear.com/9.x/glass/svg?seed={$m->user_id}",
+                'role' => $m->role->value,
+                'is_owner' => $m->isOwner(),
+                'created_at' => $m->created_at,
+            ])->all()),
             'pendingInvitations' => $pending,
             'canManage' => $user->hasAllPermissions(['workspace.users.manage'], $workspace->id),
             'availableRoles' => ['member', 'admin'],

@@ -329,6 +329,8 @@ export default function Composer({
                     queueDisabled={queueState.status !== 'found'}
                     onSaveDraft={flush}
                     onEnsurePost={ensurePost}
+                    onOptimisticSubmit={publishStatus.applyOptimistic}
+                    onServerPost={publishStatus.applyServerPost}
                 />
             </div>
 

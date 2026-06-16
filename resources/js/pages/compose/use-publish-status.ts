@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react';
 
 import { retry as retryRoute } from '@/routes/posts/targets';
 
-import { anyTargetActive } from './publish-status';
+import {
+    anyTargetActive,
+    applyOptimisticSubmit,
+    type OptimisticSubmit,
+} from './publish-status';
 import type { PostView } from './types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -63,6 +67,23 @@ export function usePublishStatus({ pagePost }: UsePublishStatus) {
         setSnapshot(post);
     }
 
+    /**
+     * Optimistically flip the current snapshot to its in-flight state the
+     * instant the user submits, so the status chips react before the request
+     * resolves. Returns a `revert` that restores the pre-submit snapshot — call
+     * it on request failure; on success the server post (or poll) supersedes it.
+     */
+    function applyOptimistic(optimistic: OptimisticSubmit): () => void {
+        let prior: PostView | null = null;
+        setSnapshot((current) => {
+            prior = current;
+
+            return current ? applyOptimisticSubmit(current, optimistic) : null;
+        });
+
+        return () => setSnapshot(prior);
+    }
+
     /** Re-dispatch a single failed target, then adopt the response. */
     async function retry(targetId: string) {
         if (!snapshot || retryingIds.has(targetId)) {
@@ -92,6 +113,7 @@ export function usePublishStatus({ pagePost }: UsePublishStatus) {
         snapshot,
         retryingIds,
         applyServerPost,
+        applyOptimistic,
         retry,
     };
 }

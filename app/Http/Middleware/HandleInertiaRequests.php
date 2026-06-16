@@ -2,7 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\Platform;
 use App\Enums\SocialProvider;
+use App\Models\AccountSet;
+use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
 use Illuminate\Http\Request;
@@ -50,6 +53,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'workspaces' => $this->workspacesData($request->user()),
+            'shell' => $this->shellData($request->user()),
             'socialite' => [
                 'providers' => SocialProvider::enabledProviders(),
             ],
@@ -57,6 +61,44 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
             ],
+        ];
+    }
+
+    /**
+     * Shell data needed by the sidebar, composer, and command palette on nearly
+     * every page. Kept lightweight so it is cheap to resolve per request.
+     *
+     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed}
+     */
+    private function shellData(?User $user): array
+    {
+        if (! $user) {
+            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits()];
+        }
+
+        $accounts = ConnectedAccount::query()
+            ->get()
+            ->map(fn (ConnectedAccount $account): array => [
+                'id' => $account->id,
+                'platform' => $account->platform->value,
+                'handle' => $account->handle,
+                'display_name' => $account->display_name,
+                'avatar_url' => $account->avatar_url,
+            ])->values()->all();
+
+        $sets = AccountSet::query()
+            ->with('accounts:id')
+            ->get()
+            ->map(fn (AccountSet $set): array => [
+                'id' => $set->id,
+                'name' => $set->name,
+                'connected_account_ids' => $set->accounts->pluck('id')->all(),
+            ])->values()->all();
+
+        return [
+            'accounts' => $accounts,
+            'sets' => $sets,
+            'limits' => Platform::allLimits(),
         ];
     }
 

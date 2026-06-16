@@ -33,24 +33,22 @@ class CalendarController extends Controller
         $start = $anchor->startOfWeek(CarbonImmutable::SUNDAY);
         $end = $start->addDays(41)->endOfDay();
 
-        $posts = Post::query()
-            ->with(['author:id,name', 'targets'])
-            ->whereIn('status', [
-                PostStatus::Scheduled->value, PostStatus::Published->value,
-                PostStatus::Partial->value, PostStatus::Failed->value,
-            ])
-            ->where(fn ($q) => $q
-                ->whereBetween('scheduled_at', [$start, $end])
-                ->orWhereBetween('published_at', [$start, $end]))
-            ->orderByRaw('COALESCE(scheduled_at, published_at) ASC')
-            ->get()
-            ->map(fn (Post $post): array => PostListItem::make($post))
-            ->all();
-
         return Inertia::render('posts/calendar/index', [
             'yyyymm' => $yyyymm,
             'view' => $view,
-            'posts' => $posts,
+            'posts' => Inertia::defer(fn (): array => Post::query()
+                ->with(['author:id,name', 'targets'])
+                ->whereIn('status', [
+                    PostStatus::Scheduled->value, PostStatus::Published->value,
+                    PostStatus::Partial->value, PostStatus::Failed->value,
+                ])
+                ->where(fn ($q) => $q
+                    ->whereBetween('scheduled_at', [$start, $end])
+                    ->orWhereBetween('published_at', [$start, $end]))
+                ->orderByRaw('COALESCE(scheduled_at, published_at) ASC')
+                ->get()
+                ->map(fn (Post $post): array => PostListItem::make($post))
+                ->all()),
         ]);
     }
 }

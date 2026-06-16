@@ -29,23 +29,19 @@ class PostingScheduleController extends Controller
             ->with('slots')
             ->first();
 
-        if ($schedule === null) {
-            $timezone = 'UTC';
-            $slots = [];
-        } else {
-            $timezone = $schedule->timezone;
-            $slots = $schedule->slots->map(fn (PostingScheduleSlot $slot): array => [
-                'weekday' => $slot->weekday,
-                'hour' => $slot->hour,
-                'minute' => $slot->minute,
-                'position' => $slot->position,
-            ])->values()->all();
-        }
+        $timezone = $schedule === null ? 'UTC' : $schedule->timezone;
 
         return Inertia::render('queue/index', [
             'timezone' => $timezone,
-            'slots' => $slots,
             'canManage' => $user->hasAllPermissions(['workspace.settings.manage'], $workspace->id),
+            'slots' => Inertia::defer(fn (): array => $schedule === null
+                ? []
+                : $schedule->slots->map(fn (PostingScheduleSlot $slot): array => [
+                    'weekday' => $slot->weekday,
+                    'hour' => $slot->hour,
+                    'minute' => $slot->minute,
+                    'position' => $slot->position,
+                ])->values()->all()),
         ]);
     }
 

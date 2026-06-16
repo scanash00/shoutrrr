@@ -39,6 +39,8 @@ test('the recent feed exposes full row data including targets', function () {
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
             ->component('dashboard')
-            ->has('posts.0.targets')
-            ->has('posts.0.published_at'));
+            ->missing('posts')
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('posts.0.targets')
+                ->has('posts.0.published_at')));
 });

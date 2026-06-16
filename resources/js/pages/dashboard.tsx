@@ -1,20 +1,13 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Deferred, Head, usePage } from '@inertiajs/react';
 
 import { RecentFeed } from '@/components/recent-feed';
+import { RecentFeedSkeleton } from '@/components/skeletons/recent-feed-skeleton';
 import Composer from '@/pages/compose/Composer';
-import type {
-    Account,
-    AccountSet,
-    PlatformLimits,
-} from '@/pages/compose/types';
 import type { PostRowData } from '@/pages/posts/post-row';
 import { dashboard } from '@/routes';
 
 type Props = {
-    accounts: Account[];
-    sets: AccountSet[];
-    limits: PlatformLimits[];
-    posts: PostRowData[];
+    posts?: PostRowData[];
 };
 
 function timeGreeting(): string {
@@ -32,9 +25,9 @@ function timeGreeting(): string {
     return 'Good evening';
 }
 
-export default function Dashboard({ accounts, sets, limits, posts }: Props) {
+export default function Dashboard({ posts }: Props) {
     const page = usePage();
-    const { auth } = page.props;
+    const { auth, shell } = page.props;
     const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
 
     // A calendar slot click opens the composer here with a pre-set schedule time.
@@ -59,13 +52,15 @@ export default function Dashboard({ accounts, sets, limits, posts }: Props) {
 
                 <Composer
                     post={null}
-                    accounts={accounts}
-                    sets={sets}
-                    limits={limits}
+                    accounts={shell.accounts}
+                    sets={shell.sets}
+                    limits={shell.limits}
                     initialScheduleAt={initialScheduleAt}
                 />
 
-                <RecentFeed posts={posts} />
+                <Deferred data="posts" fallback={<RecentFeedSkeleton />}>
+                    <RecentFeed posts={posts ?? []} />
+                </Deferred>
             </div>
         </>
     );

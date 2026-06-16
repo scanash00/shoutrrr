@@ -50,6 +50,7 @@ it('returns scheduled + published posts whose date falls in the visible window',
         ->get(route('calendar.month', ['yyyymm' => '2026-06']))
         ->assertInertia(fn ($page) => $page
             ->component('posts/calendar/index')
-            ->has('posts', 2)
-            ->where('view', 'month'));
+            ->where('view', 'month')
+            ->missing('posts')               // deferred — streamed in after the grid frame paints
+            ->loadDeferredProps(fn ($reload) => $reload->has('posts', 2)));
 });

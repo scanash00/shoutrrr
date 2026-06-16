@@ -30,9 +30,16 @@ export default function ManagePasskeys(props: Props) {
     const passkeys = props.passkeys ?? [];
 
     const handleDelete = (id: number, onError: () => void) => {
+        // Passkey ids are numeric, so the optimistic filter runs inline rather
+        // than through removeById (which keys on string ids).
         router.delete(destroy.url(id), {
             preserveScroll: true,
             onError,
+            optimistic: (props) => ({
+                passkeys: (
+                    (props as { passkeys?: Passkey[] }).passkeys ?? []
+                ).filter((passkey) => passkey.id !== id),
+            }),
         });
     };
 

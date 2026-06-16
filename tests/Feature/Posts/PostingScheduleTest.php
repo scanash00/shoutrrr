@@ -43,10 +43,12 @@ test('the queue page renders', function () {
             ->component('queue/index')
             ->where('timezone', 'America/New_York')
             ->where('canManage', true)
-            ->has('slots', 1)
-            ->where('slots.0.weekday', 1)
-            ->where('slots.0.hour', 9)
-            ->where('slots.0.minute', 30));
+            ->missing('slots')               // deferred — absent on initial render
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('slots', 1)
+                ->where('slots.0.weekday', 1)
+                ->where('slots.0.hour', 9)
+                ->where('slots.0.minute', 30)));
 });
 
 test('the queue page renders with defaults when no schedule exists yet', function () {
@@ -58,7 +60,8 @@ test('the queue page renders with defaults when no schedule exists yet', functio
             ->component('queue/index')
             ->where('timezone', 'UTC')
             ->where('canManage', false)
-            ->has('slots', 0));
+            ->missing('slots')               // deferred — absent on initial render
+            ->loadDeferredProps(fn ($reload) => $reload->has('slots', 0)));
 });
 
 test('an admin replaces the whole slot set atomically, preserving timezone', function () {

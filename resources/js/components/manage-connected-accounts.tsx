@@ -19,7 +19,21 @@ type Props = {
 
 export default function ManageConnectedAccounts({ connections }: Props) {
     const handleDisconnect = (id: string) => {
-        router.delete(destroy.url(id), { preserveScroll: true });
+        // Disconnecting doesn't remove the provider row — it flips the row back
+        // to its "Connect" state (cleared id, connected: false), so the optimistic
+        // update maps the matching connection rather than removing it.
+        router.delete(destroy.url(id), {
+            preserveScroll: true,
+            optimistic: (props) => ({
+                connections: (
+                    (props as { connections?: Connection[] }).connections ?? []
+                ).map((connection) =>
+                    connection.id === id
+                        ? { ...connection, connected: false, id: null }
+                        : connection,
+                ),
+            }),
+        });
     };
 
     return (

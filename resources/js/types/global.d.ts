@@ -1,3 +1,8 @@
+import type {
+    Account,
+    AccountSet,
+    PlatformLimits,
+} from '@/pages/compose/types';
 import type { Auth } from '@/types/auth';
 import type { FlashData, WorkspacesData } from '@/types/workspace';
 
@@ -17,6 +22,11 @@ declare module '@inertiajs/core' {
             workspaces: WorkspacesData;
             flash: FlashData;
             socialite: { providers: string[] };
+            shell: {
+                accounts: Account[];
+                sets: AccountSet[];
+                limits: PlatformLimits[];
+            };
             [key: string]: unknown;
         };
     }

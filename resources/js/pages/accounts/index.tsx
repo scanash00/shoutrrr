@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { removeById } from '@/lib/optimistic';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/pages/compose/types';
 
@@ -441,6 +442,12 @@ export default function ConnectedAccounts({
         // a toast — don't toast again here or it fires twice.
         router.delete(ConnectedAccountController.destroy.url(account.id), {
             preserveScroll: true,
+            optimistic: (props) => ({
+                accounts: removeById(
+                    (props as { accounts?: Account[] }).accounts,
+                    account.id,
+                ),
+            }),
         });
     };
 

@@ -1,4 +1,4 @@
-import { Form, Head, router, usePage } from '@inertiajs/react';
+import { Deferred, Form, Head, router, usePage } from '@inertiajs/react';
 import {
     Crown,
     Mail,
@@ -15,6 +15,7 @@ import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings
 import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { MembersSkeleton } from '@/components/skeletons/members-skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { removeById, replaceById } from '@/lib/optimistic';
 
 type Member = {
     id: string;
@@ -73,7 +75,7 @@ type Invitation = {
 };
 
 type Props = {
-    members: Member[];
+    members?: Member[];
     pendingInvitations: Invitation[];
     canManage: boolean;
     availableRoles: string[];
@@ -514,6 +516,13 @@ export default function WorkspaceMembers({
             { role },
             {
                 preserveScroll: true,
+                optimistic: (props) => ({
+                    members: replaceById(
+                        (props as { members?: Member[] }).members,
+                        memberId,
+                        (member) => ({ ...member, role }),
+                    ),
+                }),
                 onSuccess: () => toast.success('Member role updated'),
             },
         );
@@ -524,17 +533,22 @@ export default function WorkspaceMembers({
             return;
         }
 
-        router.delete(
-            WorkspaceSettingsController.removeMember.url(memberToRemove.id),
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Member removed');
-                    setMemberToRemove(null);
-                },
-                onError: () => setMemberToRemove(null),
+        const removedId = memberToRemove.id;
+
+        router.delete(WorkspaceSettingsController.removeMember.url(removedId), {
+            preserveScroll: true,
+            optimistic: (props) => ({
+                members: removeById(
+                    (props as { members?: Member[] }).members,
+                    removedId,
+                ),
+            }),
+            onSuccess: () => {
+                toast.success('Member removed');
+                setMemberToRemove(null);
             },
-        );
+            onError: () => setMemberToRemove(null),
+        });
     };
 
     const confirmTransfer = () => {
@@ -561,6 +575,13 @@ export default function WorkspaceMembers({
             WorkspaceSettingsController.cancelInvitation.url(invitationId),
             {
                 preserveScroll: true,
+                optimistic: (props) => ({
+                    pendingInvitations: removeById(
+                        (props as { pendingInvitations?: Invitation[] })
+                            .pendingInvitations,
+                        invitationId,
+                    ),
+                }),
                 onSuccess: () => toast.success('Invitation cancelled'),
             },
         );
@@ -582,15 +603,17 @@ export default function WorkspaceMembers({
                     )}
                 </div>
 
-                <MembersTable
-                    members={members}
-                    canManage={canManage}
-                    isOwner={isOwner}
-                    availableRoles={availableRoles}
-                    onUpdateRole={handleUpdateRole}
-                    onRemove={setMemberToRemove}
-                    onTransfer={setMemberToPromote}
-                />
+                <Deferred data="members" fallback={<MembersSkeleton />}>
+                    <MembersTable
+                        members={members ?? []}
+                        canManage={canManage}
+                        isOwner={isOwner}
+                        availableRoles={availableRoles}
+                        onUpdateRole={handleUpdateRole}
+                        onRemove={setMemberToRemove}
+                        onTransfer={setMemberToPromote}
+                    />
+                </Deferred>
 
                 <PendingInvitationsTable
                     invitations={pendingInvitations}

@@ -1,4 +1,4 @@
-import { router, useHttp } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
@@ -24,6 +24,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSchedulingTimezone } from '@/hooks/use-scheduling-timezone';
+import { removeById, replaceById } from '@/lib/optimistic';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import {
     defaultPickedAt,
@@ -46,6 +47,26 @@ function stopBubble(e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
 }
 
+/**
+ * The `posts` page prop is a flat array on the dashboard feed but a
+ * `{ data: [...] }` page on the posts index. Apply `update` to whichever shape
+ * and return the optimistic partial for `router`'s `optimistic` option.
+ */
+function optimisticPosts(
+    props: object,
+    update: (list: PostRowData[]) => PostRowData[],
+): Record<string, unknown> {
+    const current = (props as { posts?: unknown }).posts;
+    if (Array.isArray(current)) {
+        return { posts: update(current as PostRowData[]) };
+    }
+    if (current && Array.isArray((current as { data?: unknown }).data)) {
+        const paged = current as { data: PostRowData[] };
+        return { posts: { ...paged, data: update(paged.data) } };
+    }
+    return {};
+}
+
 export function PostRowActions({ post }: Props) {
     // PostRowData is structurally compatible with the subset postCapabilities reads
     // (.status: PostStatus, .targets[].status: TargetStatus).
@@ -56,8 +77,6 @@ export function PostRowActions({ post }: Props) {
     const [pickedAt, setPickedAt] = useState<string>(() => defaultPickedAt(tz));
     const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
     const [shareOpen, setShareOpen] = useState(false);
-
-    const http = useHttp<Record<string, never>, Record<string, never>>({});
 
     function handleEdit() {
         router.visit(ComposerController.show(post.id).url);
@@ -80,13 +99,23 @@ export function PostRowActions({ post }: Props) {
         setMode('rescheduling');
     }
 
-    async function saveSchedule() {
-        http.transform(() => ({ scheduled_at: pickedAt }));
-        await http.put(PostScheduleController.update(post.id).url, {
-            onNetworkError: () => undefined,
-        });
+    function saveSchedule() {
+        router.put(
+            PostScheduleController.update(post.id).url,
+            { scheduled_at: pickedAt },
+            {
+                preserveScroll: true,
+                optimistic: (props) =>
+                    optimisticPosts(props, (list) =>
+                        replaceById(list, post.id, (p) => ({
+                            ...p,
+                            status: 'scheduled',
+                            scheduled_at: pickedAt,
+                        })),
+                    ),
+            },
+        );
         setMode('menu');
-        router.reload({ only: ['posts'] });
     }
 
     function cancelSchedule() {
@@ -97,25 +126,47 @@ export function PostRowActions({ post }: Props) {
         setConfirmKind('unschedule');
     }
 
-    async function confirmUnschedule() {
-        http.transform(() => ({ scheduled_at: null }));
-        await http.put(PostScheduleController.update(post.id).url, {
-            onNetworkError: () => undefined,
-        });
-        router.reload({ only: ['posts'] });
+    function confirmUnschedule() {
+        router.put(
+            PostScheduleController.update(post.id).url,
+            { scheduled_at: null },
+            {
+                preserveScroll: true,
+                optimistic: (props) =>
+                    optimisticPosts(props, (list) =>
+                        replaceById(list, post.id, (p) => ({
+                            ...p,
+                            status: 'draft',
+                            scheduled_at: null,
+                        })),
+                    ),
+            },
+        );
     }
 
-    async function handleRetry() {
+    function handleRetry() {
         const failedTarget = post.targets.find((t) => t.status === 'failed');
         if (!failedTarget) {
             return;
         }
-        http.transform(() => ({}));
-        await http.post(
+        router.post(
             retryRoute({ post: post.id, target: failedTarget.id }).url,
-            { onNetworkError: () => undefined },
+            {},
+            {
+                preserveScroll: true,
+                optimistic: (props) =>
+                    optimisticPosts(props, (list) =>
+                        replaceById(list, post.id, (p) => ({
+                            ...p,
+                            targets: p.targets.map((t) =>
+                                t.id === failedTarget.id
+                                    ? { ...t, status: 'pending' }
+                                    : t,
+                            ),
+                        })),
+                    ),
+            },
         );
-        router.reload({ only: ['posts'] });
     }
 
     function handleDelete() {
@@ -123,7 +174,11 @@ export function PostRowActions({ post }: Props) {
     }
 
     function confirmDelete() {
-        router.delete(PostController.destroy(post.id).url);
+        router.delete(PostController.destroy(post.id).url, {
+            preserveScroll: true,
+            optimistic: (props) =>
+                optimisticPosts(props, (list) => removeById(list, post.id)),
+        });
     }
 
     const deleteDescription =
@@ -149,7 +204,7 @@ export function PostRowActions({ post }: Props) {
                 <Button
                     size="sm"
                     className="h-8 text-[12.5px]"
-                    onClick={() => void saveSchedule()}
+                    onClick={saveSchedule}
                 >
                     Save
                 </Button>
@@ -196,7 +251,7 @@ export function PostRowActions({ post }: Props) {
                         </DropdownMenuItem>
                     )}
                     {caps.canRetry && (
-                        <DropdownMenuItem onSelect={() => void handleRetry()}>
+                        <DropdownMenuItem onSelect={handleRetry}>
                             Retry failed
                         </DropdownMenuItem>
                     )}
@@ -236,9 +291,7 @@ export function PostRowActions({ post }: Props) {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => void confirmUnschedule()}
-                        >
+                        <AlertDialogAction onClick={confirmUnschedule}>
                             Unschedule
                         </AlertDialogAction>
                     </AlertDialogFooter>

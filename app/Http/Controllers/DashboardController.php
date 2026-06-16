@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\Platform;
-use App\Models\AccountSet;
-use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Support\PostListItem;
 use Illuminate\Http\Request;
@@ -20,38 +17,14 @@ class DashboardController extends Controller
      */
     public function index(Request $request): Response
     {
-        $accounts = ConnectedAccount::query()
-            ->get()
-            ->map(fn (ConnectedAccount $account): array => [
-                'id' => $account->id,
-                'platform' => $account->platform->value,
-                'handle' => $account->handle,
-                'display_name' => $account->display_name,
-                'avatar_url' => $account->avatar_url,
-            ])->all();
-
-        $sets = AccountSet::query()
-            ->with('accounts:id')
-            ->get()
-            ->map(fn (AccountSet $set): array => [
-                'id' => $set->id,
-                'name' => $set->name,
-                'connected_account_ids' => $set->accounts->pluck('id')->all(),
-            ])->all();
-
-        $posts = Post::query()
-            ->with(['author:id,name', 'targets'])
-            ->latest('updated_at')
-            ->limit(25)
-            ->get()
-            ->map(fn (Post $post): array => PostListItem::make($post))
-            ->all();
-
         return Inertia::render('dashboard', [
-            'accounts' => $accounts,
-            'sets' => $sets,
-            'limits' => Platform::allLimits(),
-            'posts' => $posts,
+            'posts' => Inertia::defer(fn (): array => Post::query()
+                ->with(['author:id,name', 'targets'])
+                ->latest('updated_at')
+                ->limit(25)
+                ->get()
+                ->map(fn (Post $post): array => PostListItem::make($post))
+                ->all()),
         ]);
     }
 }

@@ -1,8 +1,16 @@
-import { Head, InfiniteScroll, Link, router, usePage } from '@inertiajs/react';
+import {
+    Deferred,
+    Head,
+    InfiniteScroll,
+    Link,
+    router,
+    usePage,
+} from '@inertiajs/react';
 import { Filter, Inbox, Search, SearchX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { FilterTabs } from '@/components/filter-tabs';
+import { PostListSkeleton } from '@/components/skeletons/post-list-skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +40,7 @@ import { index as postsRoute } from '@/routes/posts';
 type StatusTab = 'all' | 'scheduled' | 'draft' | 'published' | 'missed';
 
 type Props = {
-    posts: { data: PostRowData[] };
+    posts?: { data: PostRowData[] };
     filters: { status: string; set: string; platform: string; q: string };
     sets: { id: string; name: string }[];
     counts: Record<StatusTab, number>;
@@ -164,7 +172,7 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
     )?.label;
     const setLabel = sets.find((s) => s.id === filters.set)?.name;
 
-    const items = posts.data;
+    const items = posts?.data ?? [];
 
     return (
         <>
@@ -314,56 +322,71 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
 
                 {/* List body */}
                 <div className="p-4">
-                    {items.length === 0 ? (
-                        <Empty>
-                            <EmptyHeader>
-                                <EmptyMedia variant="icon">
-                                    {hasActiveFilter ? <SearchX /> : <Inbox />}
-                                </EmptyMedia>
-                                <EmptyTitle>
-                                    {hasActiveFilter
-                                        ? 'No matching posts'
-                                        : 'No posts yet'}
-                                </EmptyTitle>
-                                <EmptyDescription>
-                                    {emptyMessage(
-                                        filters.status,
-                                        hasActiveFilter,
+                    <Deferred data="posts" fallback={<PostListSkeleton />}>
+                        <>
+                            {items.length === 0 ? (
+                                <Empty>
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon">
+                                            {hasActiveFilter ? (
+                                                <SearchX />
+                                            ) : (
+                                                <Inbox />
+                                            )}
+                                        </EmptyMedia>
+                                        <EmptyTitle>
+                                            {hasActiveFilter
+                                                ? 'No matching posts'
+                                                : 'No posts yet'}
+                                        </EmptyTitle>
+                                        <EmptyDescription>
+                                            {emptyMessage(
+                                                filters.status,
+                                                hasActiveFilter,
+                                            )}
+                                        </EmptyDescription>
+                                    </EmptyHeader>
+                                    {!hasActiveFilter && (
+                                        <EmptyContent>
+                                            <Button
+                                                asChild
+                                                variant="outline"
+                                                size="sm"
+                                            >
+                                                <Link href={dashboard().url}>
+                                                    New post
+                                                </Link>
+                                            </Button>
+                                        </EmptyContent>
                                     )}
-                                </EmptyDescription>
-                            </EmptyHeader>
-                            {!hasActiveFilter && (
-                                <EmptyContent>
-                                    <Button asChild variant="outline" size="sm">
-                                        <Link href={dashboard().url}>
-                                            New post
-                                        </Link>
-                                    </Button>
-                                </EmptyContent>
+                                </Empty>
+                            ) : (
+                                <InfiniteScroll
+                                    data="posts"
+                                    next={({ loading }) =>
+                                        loading ? (
+                                            <Skeleton className="h-12 w-full" />
+                                        ) : null
+                                    }
+                                >
+                                    <div className="rounded-xl border border-border">
+                                        {items.map((post) => (
+                                            <PostRow
+                                                key={post.id}
+                                                post={post}
+                                            />
+                                        ))}
+                                    </div>
+                                </InfiniteScroll>
                             )}
-                        </Empty>
-                    ) : (
-                        <InfiniteScroll
-                            data="posts"
-                            next={({ loading }) =>
-                                loading ? (
-                                    <Skeleton className="h-12 w-full" />
-                                ) : null
-                            }
-                        >
-                            <div className="rounded-xl border border-border">
-                                {items.map((post) => (
-                                    <PostRow key={post.id} post={post} />
-                                ))}
-                            </div>
-                        </InfiniteScroll>
-                    )}
 
-                    {!hasMore && items.length > 0 && (
-                        <p className="mt-4 text-center text-xs text-muted-foreground">
-                            All posts loaded.
-                        </p>
-                    )}
+                            {!hasMore && items.length > 0 && (
+                                <p className="mt-4 text-center text-xs text-muted-foreground">
+                                    All posts loaded.
+                                </p>
+                            )}
+                        </>
+                    </Deferred>
                 </div>
             </div>
         </>
