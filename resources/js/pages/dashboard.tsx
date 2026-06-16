@@ -1,5 +1,6 @@
 import { Deferred, Head, usePage } from '@inertiajs/react';
 
+import { DashboardAura } from '@/components/dashboard-aura';
 import { RecentFeed } from '@/components/recent-feed';
 import { RecentFeedSkeleton } from '@/components/skeletons/recent-feed-skeleton';
 import Composer from '@/pages/compose/Composer';
@@ -39,10 +40,15 @@ export default function Dashboard({ posts }: Props) {
     return (
         <>
             <Head title="Dashboard" />
-            <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
+            <div className="relative isolate mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">
+                <DashboardAura />
                 <h1 className="text-[26px] leading-tight font-semibold tracking-tight">
                     {timeGreeting()},{' '}
-                    <span className="bg-gradient-to-br from-primary to-primary/60 bg-clip-text text-transparent">
+                    {/* Brand-green gradient name. Stops are derived from
+                        --primary but darkened for light mode (the raw token is
+                        too light to read on a white background, and the aura
+                        sits behind it) and brightened for dark mode. */}
+                    <span className="bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_70%,black)] to-[color-mix(in_oklch,var(--primary)_48%,black)] bg-clip-text text-transparent dark:from-primary dark:to-[color-mix(in_oklch,var(--primary)_65%,white)]">
                         {firstName}
                     </span>
                 </h1>

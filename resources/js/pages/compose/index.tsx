@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, PenLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { PostPageActions } from '@/pages/posts/post-page-actions';
 import { dashboard } from '@/routes';
 import { index as postsRoute } from '@/routes/posts';
 
@@ -30,11 +31,11 @@ export default function ComposePage({
                     >
                         <Link href={postsRoute().url}>
                             <ArrowLeft className="size-4" />
-                            Drafts
+                            Posts
                         </Link>
                     </Button>
                     <div className="h-4 w-px bg-border" aria-hidden />
-                    <div className="flex min-w-0 items-center gap-1.5">
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                         <PenLine
                             className="size-3.5 shrink-0 text-muted-foreground"
                             aria-hidden
@@ -43,6 +44,7 @@ export default function ComposePage({
                             {title || 'Untitled draft'}
                         </span>
                     </div>
+                    {post && <PostPageActions post={post} />}
                 </div>
 
                 <Composer

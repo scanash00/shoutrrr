@@ -6,6 +6,7 @@ import PostController from '@/actions/App/Http/Controllers/Posts/PostController'
 import {
     buildPutBody,
     type ComposerAction,
+    composerHasContent,
     type ComposerState,
 } from './composer-state';
 import type { PostView } from './types';
@@ -169,6 +170,14 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
         if (inFlight.current || state.saveState !== 'dirty') {
             return;
         }
+        // An empty composer with no draft yet has nothing worth a POST — a
+        // destination change alone must not create a blank draft. Media-first
+        // uploads still create one via `ensurePost` (media counts as content).
+        if (postIdRef.current === null && !composerHasContent(state)) {
+            dispatch({ type: 'saveSkippedEmpty' });
+
+            return;
+        }
         await enqueueSave(persist);
     }
 
@@ -188,6 +197,13 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
             await inFlight.current;
         }
         if (state.saveState === 'saved' || state.saveState === 'idle') {
+            return;
+        }
+        // Same empty-draft guard as the debounced path: forcing a save (e.g. on
+        // a destination change or blur) must not create a blank draft either.
+        if (postIdRef.current === null && !composerHasContent(state)) {
+            dispatch({ type: 'saveSkippedEmpty' });
+
             return;
         }
         await enqueueSave(persist);

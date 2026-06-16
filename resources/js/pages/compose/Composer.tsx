@@ -171,7 +171,7 @@ export default function Composer({
         state.overrideByAccount[activeAccount.id] !== undefined;
 
     return (
-        <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+        <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color] duration-300 focus-within:border-primary/25 focus-within:shadow-[0_0_16px_-6px_color-mix(in_oklch,var(--primary)_28%,transparent)]">
             {/* Tab-strip row */}
             <div className="flex items-center border-b border-border px-2 pt-2">
                 <PlatformTabs

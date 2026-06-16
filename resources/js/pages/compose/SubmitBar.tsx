@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
+import { celebrate } from '@/lib/celebrate';
 import { cn } from '@/lib/utils';
 import { publish, queue } from '@/routes/posts';
 
@@ -75,15 +76,20 @@ export function SubmitBar({
             return;
         }
 
+        // Shared success path for all three modes: celebrate the post going out,
+        // adopt the server snapshot, then reload the compose page.
+        const onSuccess = ({ post }: { post: PostView }) => {
+            celebrate();
+            onServerPost(post);
+            router.visit(ComposerController.show(id).url);
+        };
+
         if (tray.mode === 'now') {
             // Flip the chips to "Publishing" instantly; revert if the call fails.
             const revert = onOptimisticSubmit(OPTIMISTIC_PUBLISH);
             http.transform(() => ({}));
             await http.post(publish(id).url, {
-                onSuccess: ({ post }) => {
-                    onServerPost(post);
-                    router.visit(ComposerController.show(id).url);
-                },
+                onSuccess,
                 onHttpException: revert,
                 onNetworkError: revert,
             });
@@ -96,10 +102,7 @@ export function SubmitBar({
             const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
             http.transform(() => ({}));
             await http.post(queue(id).url, {
-                onSuccess: ({ post }) => {
-                    onServerPost(post);
-                    router.visit(ComposerController.show(id).url);
-                },
+                onSuccess,
                 // 422 = no open slot in the workspace posting schedule.
                 onHttpException: (response) => {
                     revert();
@@ -117,10 +120,7 @@ export function SubmitBar({
         const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
         await http.put(PostScheduleController.update(id).url, {
-            onSuccess: ({ post }) => {
-                onServerPost(post);
-                router.visit(ComposerController.show(id).url);
-            },
+            onSuccess,
             // 422 = the chosen time is in the past (server guard).
             onHttpException: (response) => {
                 revert();

@@ -26,6 +26,11 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
 
+    /* Drifting blobs + rotating sheen for the decorative dashboard aura. */
+    --animate-aura-a: aura-a 14s ease-in-out infinite;
+    --animate-aura-b: aura-b 18s ease-in-out infinite;
+    --animate-aura-spin: aura-spin 32s linear infinite;
+
     --color-background: var(--background);
     --color-foreground: var(--foreground);
 
@@ -291,4 +296,47 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Decorative dashboard aura: blobs drift + scale + rotate on slow loops, with a
+   rotating conic sheen behind them. Movement is deliberately large so it reads
+   through the heavy blur. */
+@keyframes aura-a {
+    0%,
+    100% {
+        transform: translate3d(-16%, -12%, 0) scale(1) rotate(0deg);
+    }
+    50% {
+        transform: translate3d(22%, 16%, 0) scale(1.4) rotate(28deg);
+    }
+}
+
+@keyframes aura-b {
+    0%,
+    100% {
+        transform: translate3d(16%, 10%, 0) scale(1.2) rotate(0deg);
+    }
+    50% {
+        transform: translate3d(-20%, -16%, 0) scale(0.85) rotate(-32deg);
+    }
+}
+
+@keyframes aura-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* SVG fractal-noise grain that gives the gradient some tactile texture. */
+.aura-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-aura-a,
+    .animate-aura-b,
+    .animate-aura-spin {
+        animation: none !important;
+    }
 }

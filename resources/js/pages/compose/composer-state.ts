@@ -51,6 +51,7 @@ export type ComposerAction =
     | { type: 'reorderMedia'; ids: string[] }
     | { type: 'setScheduleTray'; tray: ScheduleTray }
     | { type: 'saveStarted' }
+    | { type: 'saveSkippedEmpty' }
     | { type: 'saveSucceeded'; post: PostView }
     | { type: 'saveFailedOffline' }
     | { type: 'saveFailedStale'; post: PostView }
@@ -251,6 +252,14 @@ export function composerReducer(
         case 'saveStarted':
             return { ...state, saveState: 'saving' };
 
+        case 'saveSkippedEmpty':
+            // The composer is empty and has no persisted draft yet, so a
+            // destination change alone must not spawn a blank draft. Drop the
+            // dirty flag; typing or attaching media will mark it dirty again.
+            return state.saveState === 'dirty'
+                ? { ...state, saveState: 'idle' }
+                : state;
+
         case 'saveSucceeded':
             // Preserve 'dirty' if the user typed during the in-flight save so the
             // debounce reschedules; otherwise mark 'saved'. Always advance the
@@ -341,6 +350,21 @@ export function buildPutBody(
         media_ids: state.media.map((m) => m.id),
         expected_updated_at: state.baselineUpdatedAt,
     };
+}
+
+/**
+ * Whether the composer holds anything worth persisting as a draft: base text,
+ * any per-account override text, or attached media. Destination and schedule
+ * changes are deliberately NOT content — they must not spawn a blank draft.
+ */
+export function composerHasContent(state: ComposerState): boolean {
+    if (state.baseText.trim().length > 0 || state.media.length > 0) {
+        return true;
+    }
+
+    return Object.values(state.overrideByAccount).some(
+        (text) => (text ?? '').trim().length > 0,
+    );
 }
 
 /**

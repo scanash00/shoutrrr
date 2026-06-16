@@ -1,5 +1,5 @@
-import { router, useHttp } from '@inertiajs/react';
-import { Fragment, useState } from 'react';
+import { router } from '@inertiajs/react';
+import { Fragment } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/platform-glyph';
@@ -7,12 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { postStatusMeta } from '@/lib/posts/status';
 import { cn } from '@/lib/utils';
-import {
-    type ChipTarget,
-    TargetStatusChips,
-} from '@/pages/compose/TargetStatusChips';
-import type { PlatformName, PostStatus, PostView } from '@/pages/compose/types';
-import { retry as retryRoute } from '@/routes/posts/targets';
+import type { ChipTarget } from '@/pages/compose/TargetStatusChips';
+import type { PlatformName, PostStatus } from '@/pages/compose/types';
 
 import { PostRowActions } from './post-row-actions';
 
@@ -55,42 +51,36 @@ function StatusBadge({ status }: { status: PostStatus }) {
     return <Badge variant={meta.variant}>{meta.label}</Badge>;
 }
 
+/**
+ * The timestamp the row leads with depends on what's relevant for the status:
+ * published posts show when they went out, scheduled posts show when they will,
+ * and everything else falls back to the last edit. The badge already names the
+ * status, so the rail only needs to carry the time.
+ */
+function rowTimestamp(post: PostRowData): string {
+    if (post.status === 'published' || post.status === 'partial') {
+        return post.published_at ?? post.updated_at;
+    }
+    if (
+        post.status === 'scheduled' ||
+        post.status === 'publishing' ||
+        post.status === 'missed'
+    ) {
+        return post.scheduled_at ?? post.updated_at;
+    }
+
+    return post.updated_at;
+}
+
 export function PostRow({ post }: { post: PostRowData }) {
-    const timestampStr = post.scheduled_at ?? post.updated_at;
-    const { when, time } = formatWhen(timestampStr);
+    const { when, time } = formatWhen(rowTimestamp(post));
     // Default the optional list fields: an older/partial Inertia payload (e.g. a
     // page loaded before the index exposed per-target data) must not crash the row.
     const platforms = post.platforms ?? [];
     const accounts = post.target_count ?? 0;
-
-    // The list does not poll; chips seed from the row payload and only the row
-    // whose target was just retried live-updates from the retry response.
-    const http = useHttp<Record<string, never>, { post: PostView }>({});
-    const [targets, setTargets] = useState<ChipTarget[]>(post.targets ?? []);
-    const [retryingIds, setRetryingIds] = useState<ReadonlySet<string>>(
-        () => new Set(),
-    );
-
-    async function retryTarget(targetId: string) {
-        if (retryingIds.has(targetId)) {
-            return;
-        }
-        setRetryingIds((prev) => new Set(prev).add(targetId));
-        try {
-            const result = await http.post(
-                retryRoute({ post: post.id, target: targetId }).url,
-                { onNetworkError: () => undefined },
-            );
-            setTargets(result.post.targets);
-        } finally {
-            setRetryingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(targetId);
-
-                return next;
-            });
-        }
-    }
+    const failedCount = (post.targets ?? []).filter(
+        (t: ChipTarget) => t.status === 'failed',
+    ).length;
 
     function openCompose() {
         router.visit(ComposerController.show(post.id).url);
@@ -129,6 +119,19 @@ export function PostRow({ post }: { post: PostRowData }) {
         ),
     });
 
+    // The one actionable signal a list needs: that something failed, and how
+    // much. Detail and retry stay in the actions menu / on opening the post.
+    if (failedCount > 0) {
+        metaParts.push({
+            key: 'failed',
+            node: (
+                <span className="font-medium text-destructive">
+                    {failedCount} failed
+                </span>
+            ),
+        });
+    }
+
     return (
         <div
             // oxlint-disable-next-line prefer-tag-over-role -- actions buttons are nested, can't use <button>
@@ -150,9 +153,10 @@ export function PostRow({ post }: { post: PostRowData }) {
                     <div className="mt-0.5">{time}</div>
                 </div>
 
-                {/* Middle: text + meta */}
+                {/* Middle: text + meta. The text block reserves two lines so
+                    every row lines up regardless of status or content length. */}
                 <div className="min-w-0">
-                    <p className="line-clamp-2 text-[13.5px] leading-snug tracking-tight text-foreground">
+                    <p className="line-clamp-2 min-h-[2.75em] text-[13.5px] leading-snug tracking-tight text-foreground">
                         {post.base_text.trim() || (
                             <span className="text-muted-foreground">
                                 Untitled draft
@@ -172,24 +176,6 @@ export function PostRow({ post }: { post: PostRowData }) {
                             </Fragment>
                         ))}
                     </div>
-                    {post.status !== 'draft' &&
-                        targets.length > 0 && (
-                            // oxlint-disable-next-line prefer-tag-over-role -- stop row-click bubbling on retry
-                            <div
-                                role="presentation"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                className="mt-2.5"
-                            >
-                                <TargetStatusChips
-                                    targets={targets}
-                                    retryingIds={retryingIds}
-                                    onRetry={(targetId) =>
-                                        void retryTarget(targetId)
-                                    }
-                                />
-                            </div>
-                        )}
                 </div>
 
                 {/* Right: badge + actions */}

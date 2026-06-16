@@ -1,6 +1,7 @@
 import baseDayjs, { type Dayjs } from 'dayjs';
 import advancedFormat from 'dayjs/plugin/advancedFormat';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import weekday from 'dayjs/plugin/weekday';
@@ -10,6 +11,7 @@ baseDayjs.extend(timezone);
 baseDayjs.extend(advancedFormat);
 baseDayjs.extend(customParseFormat);
 baseDayjs.extend(weekday);
+baseDayjs.extend(relativeTime);
 
 export const dayjs = baseDayjs;
 export type { Dayjs };

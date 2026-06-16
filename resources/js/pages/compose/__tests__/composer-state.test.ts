@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     buildPutBody,
+    composerHasContent,
     composerReducer,
     firstLineTitle,
     initialComposerState,
@@ -332,6 +333,29 @@ describe('composerReducer', () => {
         expect(state.conflict).toBeNull();
     });
 
+    it('drops dirty back to idle on saveSkippedEmpty (empty composer, no draft)', () => {
+        // A destination change marks an empty new composer dirty; the autosave
+        // guard then skips the create and dispatches saveSkippedEmpty.
+        const dirty = composerReducer(initialComposerState(), {
+            type: 'setDestination',
+            destination: { kind: 'account', id: 'a1' },
+        });
+        expect(dirty.saveState).toBe('dirty');
+
+        const skipped = composerReducer(dirty, { type: 'saveSkippedEmpty' });
+        expect(skipped.saveState).toBe('idle');
+        // destination still updated — only the dirty flag was cleared
+        expect(skipped.destination).toEqual({ kind: 'account', id: 'a1' });
+    });
+
+    it('leaves a non-dirty state untouched on saveSkippedEmpty', () => {
+        const saved = hydrated();
+        expect(saved.saveState).toBe('saved');
+        expect(
+            composerReducer(saved, { type: 'saveSkippedEmpty' }).saveState,
+        ).toBe('saved');
+    });
+
     it('replaces the schedule tray without touching saveState', () => {
         const state = hydrated();
         expect(state.scheduleTray).toEqual({ mode: 'now', pickedAt: null });
@@ -431,6 +455,64 @@ describe('buildPutBody', () => {
         });
         const body = buildPutBody(state, ['a1', 'a2']);
         expect(body.media_ids).toEqual(['m1', 'm2']);
+    });
+});
+
+describe('composerHasContent', () => {
+    it('is false for a fresh, empty composer (only destination/schedule set)', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setDestination',
+            destination: { kind: 'account', id: 'a1' },
+        });
+        expect(composerHasContent(state)).toBe(false);
+    });
+
+    it('is false when base text is only whitespace', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'updateBaseText',
+            text: '   \n  ',
+        });
+        expect(composerHasContent(state)).toBe(false);
+    });
+
+    it('is true once base text has non-whitespace', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'updateBaseText',
+            text: 'hi',
+        });
+        expect(composerHasContent(state)).toBe(true);
+    });
+
+    it('is true when media is attached, even with empty text', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 0,
+            },
+        });
+        expect(composerHasContent(state)).toBe(true);
+    });
+
+    it('is true when a per-account override has text but base text is empty', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setOverrideText',
+            accountId: 'a1',
+            text: 'just for x',
+        });
+        expect(composerHasContent(state)).toBe(true);
+    });
+
+    it('ignores a whitespace-only override', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setOverrideText',
+            accountId: 'a1',
+            text: '   ',
+        });
+        expect(composerHasContent(state)).toBe(false);
     });
 });
 
