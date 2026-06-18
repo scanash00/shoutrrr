@@ -10,11 +10,14 @@ use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
 
 class TokenManager
 {
     private const int SKEW_SECONDS = 120;
+
+    private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -30,7 +33,7 @@ class TokenManager
         $secret = $account->secret()->firstOrFail();
 
         if ($account->platform === Platform::Bluesky) {
-            return $this->blueskyCredentials($secret);
+            return $this->blueskyCredentials($account, $secret);
         }
 
         if (! $force && ! $this->needsRefresh($account)) {
@@ -50,14 +53,96 @@ class TokenManager
     }
 
     /**
+     * Hand the publisher a fresh Bluesky session. The accessJwt minted at connect
+     * time expires ~2h later, so a draft scheduled or published any later fails
+     * with "ExpiredToken". Mint a new accessJwt first: refresh with the long-lived
+     * refreshJwt, then fall back to a full app-password login if that token has
+     * also lapsed. Only when both fail do we surface the account as needing
+     * attention and return the stale session (the publish then fails cleanly).
+     *
      * @return array<string, mixed>
      */
-    private function blueskyCredentials(ConnectedAccountSecret $secret): array
+    private function blueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
     {
-        return [
-            'session' => $secret->session ?? [],
-            'app_password' => $secret->app_password,
-        ];
+        $session = $secret->session ?? [];
+        $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
+
+        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''))
+            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password);
+
+        if ($tokens === null) {
+            $account->forceFill(['status' => ConnectedAccountStatus::NeedsAttention->value])->save();
+
+            return ['session' => $session, 'app_password' => $secret->app_password];
+        }
+
+        $session = [...$session, ...$tokens, 'pds' => $pds];
+        $secret->forceFill(['session' => $session])->save();
+        $account->forceFill([
+            'last_refreshed_at' => Date::now(),
+            'status' => ConnectedAccountStatus::Active->value,
+        ])->save();
+
+        return ['session' => $session, 'app_password' => $secret->app_password];
+    }
+
+    /**
+     * Exchange the refreshJwt for a new access/refresh pair. Returns null when the
+     * refresh token is absent or rejected, so the caller can fall back to a login.
+     *
+     * @return array{accessJwt: string, refreshJwt: string}|null
+     */
+    private function refreshBlueskySession(string $pds, string $refreshJwt): ?array
+    {
+        if ($refreshJwt === '') {
+            return null;
+        }
+
+        // refreshSession authenticates with the refreshJwt as the bearer token.
+        return $this->blueskyTokens(
+            $this->http->withToken($refreshJwt)->acceptJson()
+                ->post($pds.'/xrpc/com.atproto.server.refreshSession')
+        );
+    }
+
+    /**
+     * Mint a brand-new session from the stored app password (which does not
+     * expire). The DID is used as the login identifier.
+     *
+     * @return array{accessJwt: string, refreshJwt: string}|null
+     */
+    private function createBlueskySession(string $pds, string $identifier, string $appPassword): ?array
+    {
+        if ($identifier === '' || $appPassword === '') {
+            return null;
+        }
+
+        return $this->blueskyTokens(
+            $this->http->acceptJson()
+                ->post($pds.'/xrpc/com.atproto.server.createSession', [
+                    'identifier' => $identifier,
+                    'password' => $appPassword,
+                ])
+        );
+    }
+
+    /**
+     * @return array{accessJwt: string, refreshJwt: string}|null
+     */
+    private function blueskyTokens(Response $response): ?array
+    {
+        if ($response->failed()) {
+            return null;
+        }
+
+        $accessJwt = (string) $response->json('accessJwt');
+        $refreshJwt = (string) $response->json('refreshJwt');
+
+        if ($accessJwt === '' || $refreshJwt === '') {
+            return null;
+        }
+
+        return ['accessJwt' => $accessJwt, 'refreshJwt' => $refreshJwt];
     }
 
     /**

@@ -38,6 +38,7 @@ export type ComposerState = {
 
 export type ComposerAction =
     | { type: 'hydrate'; post: PostView }
+    | { type: 'syncServerPost'; post: PostView }
     | { type: 'setPostId'; postId: string; updatedAt: string }
     | { type: 'updateBaseText'; text: string }
     | { type: 'setActiveTab'; tab: string }
@@ -143,6 +144,32 @@ export function composerReducer(
     switch (action.type) {
         case 'hydrate':
             return hydrate(action.post);
+
+        case 'syncServerPost': {
+            // The reducer seeds from `post` only at mount, but a server-driven
+            // navigation/reload can deliver a newer version of THIS post — e.g.
+            // a schedule / queue / publish mutation bumps `updated_at` via its
+            // own request, outside the autosave path. Without re-syncing, the
+            // composer keeps the pre-mutation baseline and the next autosave
+            // 409s against the user's own change ("someone else updated this
+            // post"). Adopt the server version, but never clobber local edits or
+            // an open conflict — those own the state.
+            if (action.post.id !== state.postId) {
+                return hydrate(action.post);
+            }
+            if (
+                state.saveState === 'dirty' ||
+                state.saveState === 'saving' ||
+                state.saveState === 'conflict'
+            ) {
+                return state;
+            }
+            if (action.post.updated_at === state.baselineUpdatedAt) {
+                return state;
+            }
+
+            return hydrate(action.post);
+        }
 
         case 'setPostId':
             return {
@@ -275,6 +302,22 @@ export function composerReducer(
             return { ...state, saveState: 'offline' };
 
         case 'saveFailedStale':
+            // A stale-write 409 whose server content is byte-identical to the
+            // user's is a FALSE conflict: the post's updated_at advanced
+            // out-of-band (a schedule/publish/retry, a concurrent autosave, or a
+            // baseline that drifted across navigation) but nothing the user can
+            // see actually diverged. Silently adopt the server baseline instead
+            // of surfacing a no-op "your version / their version" diff. A genuine
+            // divergence still opens the conflict dialog.
+            if (contentMatchesServer(state, action.post)) {
+                return {
+                    ...state,
+                    saveState: 'saved',
+                    baselineUpdatedAt: action.post.updated_at,
+                    conflict: null,
+                };
+            }
+
             return { ...state, saveState: 'conflict', conflict: action.post };
 
         case 'resolveConflictUseServer':
@@ -350,6 +393,64 @@ export function buildPutBody(
         media_ids: state.media.map((m) => m.id),
         expected_updated_at: state.baselineUpdatedAt,
     };
+}
+
+/**
+ * Whether the composer's editable content is byte-identical to a server post —
+ * base text, the attached media set, and per-account override texts. Used to
+ * distinguish a real edit conflict (content diverged) from a false one (only the
+ * post's `updated_at` moved, e.g. a schedule/publish or a drifted baseline).
+ */
+export function contentMatchesServer(
+    state: ComposerState,
+    post: PostView,
+): boolean {
+    if (state.baseText !== post.base_text) {
+        return false;
+    }
+
+    const localMedia = state.media.map((m) => m.id).sort();
+    const serverMedia = post.media.map((m) => m.id).sort();
+    if (
+        localMedia.length !== serverMedia.length ||
+        localMedia.some((id, i) => id !== serverMedia[i])
+    ) {
+        return false;
+    }
+
+    const localOverrides = normalizeOverrides(state.overrideByAccount);
+    const serverOverrides: Record<string, string> = {};
+    for (const target of post.targets) {
+        const text = target.content_override?.text;
+        if (text !== undefined && text !== null) {
+            serverOverrides[target.connected_account_id] = text;
+        }
+    }
+
+    const localKeys = Object.keys(localOverrides);
+    const serverKeys = Object.keys(serverOverrides);
+
+    return (
+        localKeys.length === serverKeys.length &&
+        localKeys.every((key) => localOverrides[key] === serverOverrides[key])
+    );
+}
+
+/**
+ * Drop unset entries (undefined/null) from an override map so two maps compare
+ * equal when they carry the same *defined* per-account overrides.
+ */
+function normalizeOverrides(
+    overrides: Record<string, string | undefined>,
+): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [accountId, text] of Object.entries(overrides)) {
+        if (text !== undefined && text !== null) {
+            out[accountId] = text;
+        }
+    }
+
+    return out;
 }
 
 /**

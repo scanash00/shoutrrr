@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { Plug } from 'lucide-react';
-import { useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
@@ -82,6 +82,27 @@ export default function Composer({
               })
             : initialComposerState(initialScheduleAt),
     );
+
+    // Inertia reuses this component across same-page visits (no remount), so
+    // the reducer's mount-time hydrate is the only seed. When a navigation or
+    // reload delivers a newer/different server `post` — e.g. after a schedule,
+    // queue, or publish that mutates `updated_at` outside the autosave path —
+    // re-sync so the optimistic-concurrency baseline tracks the server.
+    // Autosave uses standalone XHR that never changes this prop, so this never
+    // fires for in-flight draft edits.
+    const syncedSig = useRef(post ? `${post.id}@${post.updated_at}` : null);
+    useEffect(() => {
+        if (!post) {
+            return;
+        }
+        const sig = `${post.id}@${post.updated_at}`;
+        if (sig === syncedSig.current) {
+            return;
+        }
+        syncedSig.current = sig;
+        dispatch({ type: 'syncServerPost', post });
+        // oxlint-disable-next-line react-hooks/exhaustive-deps
+    }, [post?.id, post?.updated_at]);
 
     const queueState = useNextSlot(
         state.scheduleTray.mode === 'queue',

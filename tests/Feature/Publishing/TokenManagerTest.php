@@ -131,18 +131,84 @@ test('linkedin token refresh sends credentials in the body', function () {
         && ! $request->hasHeader('Authorization'));
 });
 
-test('fresh returns bluesky session credentials', function () {
+test('fresh refreshes the bluesky session before publishing and persists the new tokens', function () {
     $account = ConnectedAccount::factory()->bluesky()->create(['token_expires_at' => null]);
     ConnectedAccountSecret::factory()->create([
         'connected_account_id' => $account->id,
         'app_password' => 'app-pass',
-        'session' => ['accessJwt' => 'jwt', 'refreshJwt' => 'rjwt', 'pds' => 'https://bsky.social'],
+        'session' => ['accessJwt' => 'stale-jwt', 'refreshJwt' => 'rjwt', 'pds' => 'https://bsky.social'],
     ]);
 
-    Http::fake();
+    Http::fake([
+        'https://bsky.social/xrpc/com.atproto.server.refreshSession' => Http::response([
+            'accessJwt' => 'fresh-jwt',
+            'refreshJwt' => 'fresh-rjwt',
+        ]),
+    ]);
 
     $creds = app(TokenManager::class)->fresh($account->fresh());
 
-    expect($creds['session']['accessJwt'])->toBe('jwt')
+    // The stale accessJwt is replaced with the refreshed one, never reused.
+    expect($creds['session']['accessJwt'])->toBe('fresh-jwt')
         ->and($creds['app_password'])->toBe('app-pass');
+
+    // refreshSession authenticates with the refreshJwt as the bearer token.
+    Http::assertSent(fn ($request) => $request->url() === 'https://bsky.social/xrpc/com.atproto.server.refreshSession'
+        && $request->hasHeader('Authorization', 'Bearer rjwt'));
+
+    // The new pair is persisted so the next publish starts from a valid token.
+    $account->refresh();
+    expect($account->secret->session['accessJwt'])->toBe('fresh-jwt')
+        ->and($account->secret->session['refreshJwt'])->toBe('fresh-rjwt')
+        ->and($account->last_refreshed_at)->not->toBeNull();
+});
+
+test('fresh falls back to an app-password login when the refresh token has lapsed', function () {
+    $account = ConnectedAccount::factory()->bluesky()->create([
+        'token_expires_at' => null,
+        'remote_account_id' => 'did:plc:abc123',
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'app_password' => 'app-pass',
+        'session' => ['accessJwt' => 'stale-jwt', 'refreshJwt' => 'expired-rjwt', 'pds' => 'https://bsky.social'],
+    ]);
+
+    Http::fake([
+        'https://bsky.social/xrpc/com.atproto.server.refreshSession' => Http::response(['error' => 'ExpiredToken'], 400),
+        'https://bsky.social/xrpc/com.atproto.server.createSession' => Http::response([
+            'accessJwt' => 'login-jwt',
+            'refreshJwt' => 'login-rjwt',
+        ]),
+    ]);
+
+    $creds = app(TokenManager::class)->fresh($account->fresh());
+
+    expect($creds['session']['accessJwt'])->toBe('login-jwt');
+
+    // The login uses the DID as identifier and the stored app password.
+    Http::assertSent(fn ($request) => $request->url() === 'https://bsky.social/xrpc/com.atproto.server.createSession'
+        && $request['identifier'] === 'did:plc:abc123'
+        && $request['password'] === 'app-pass');
+});
+
+test('fresh flags the bluesky account for attention when both refresh and login fail', function () {
+    $account = ConnectedAccount::factory()->bluesky()->create([
+        'token_expires_at' => null,
+        'remote_account_id' => 'did:plc:abc123',
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'app_password' => 'revoked-pass',
+        'session' => ['accessJwt' => 'stale-jwt', 'refreshJwt' => 'expired-rjwt', 'pds' => 'https://bsky.social'],
+    ]);
+
+    Http::fake([
+        'https://bsky.social/xrpc/com.atproto.server.refreshSession' => Http::response([], 400),
+        'https://bsky.social/xrpc/com.atproto.server.createSession' => Http::response(['error' => 'AuthenticationRequired'], 401),
+    ]);
+
+    app(TokenManager::class)->fresh($account->fresh());
+
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
 });

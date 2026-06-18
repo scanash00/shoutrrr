@@ -42,12 +42,16 @@ export function usePublishStatus({ pagePost }: UsePublishStatus) {
 
     const active = snapshot ? anyTargetActive(snapshot.targets) : false;
 
-    // Poll the page (only the `post` prop) while any target is in motion. The
-    // returned `start`/`stop` are unused — `usePoll` auto-cleans on unmount and
-    // we gate by toggling the interval below.
+    // Poll the page while any target is in motion. We refresh BOTH `post` and the
+    // deferred `stats` prop: publishing is async, so the initial `stats` defer
+    // resolves to null (no published targets yet). Re-evaluating it on each poll
+    // means the same response that flips a target to `published` also carries its
+    // metrics — otherwise the stats card stays empty until a manual reload.
+    // The returned `start`/`stop` are unused — `usePoll` auto-cleans on unmount
+    // and we gate by toggling it below.
     const poll = usePoll(
         POLL_INTERVAL_MS,
-        { only: ['post'] },
+        { only: ['post', 'stats'] },
         { autoStart: false },
     );
 

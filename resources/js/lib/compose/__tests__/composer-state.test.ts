@@ -334,6 +334,145 @@ describe('composerReducer', () => {
         expect(state.conflict).toBeNull();
     });
 
+    it('syncServerPost adopts a newer server version of the same post (schedule/publish bumped updated_at out-of-band)', () => {
+        // After a schedule/queue/publish mutation bumps updated_at via its own
+        // request, the page reloads with the newer post. The composer must
+        // re-baseline or the next autosave would 409 against the user's change.
+        const saved = hydrated();
+        expect(saved.baselineUpdatedAt).toBe('2026-06-12T10:00:00+00:00');
+
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            status: 'scheduled',
+            published_at: null,
+            updated_at: '2026-06-12T13:00:00+00:00',
+            scheduled_at: '2026-06-20T09:00:00+00:00',
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(saved, {
+            type: 'syncServerPost',
+            post: server,
+        });
+        expect(next.baselineUpdatedAt).toBe('2026-06-12T13:00:00+00:00');
+        expect(next.saveState).toBe('saved');
+    });
+
+    it('syncServerPost is a no-op when the server version matches the baseline', () => {
+        const saved = hydrated();
+        const same: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(saved, {
+            type: 'syncServerPost',
+            post: same,
+        });
+        expect(next).toBe(saved);
+    });
+
+    it('syncServerPost preserves local edits when the composer is dirty', () => {
+        const dirty = composerReducer(hydrated(), {
+            type: 'updateBaseText',
+            text: 'my unsaved edit',
+        });
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            status: 'scheduled',
+            published_at: null,
+            updated_at: '2026-06-12T13:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(dirty, {
+            type: 'syncServerPost',
+            post: server,
+        });
+        expect(next).toBe(dirty);
+        expect(next.baseText).toBe('my unsaved edit');
+        expect(next.saveState).toBe('dirty');
+    });
+
+    it('syncServerPost fully re-hydrates when navigating to a different post', () => {
+        const saved = hydrated();
+        const other: PostView = {
+            id: 'post-2',
+            base_text: 'a different draft',
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T14:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(saved, {
+            type: 'syncServerPost',
+            post: other,
+        });
+        expect(next.postId).toBe('post-2');
+        expect(next.baseText).toBe('a different draft');
+        expect(next.baselineUpdatedAt).toBe('2026-06-12T14:00:00+00:00');
+    });
+
+    it('auto-resolves a stale 409 silently when server content is identical (false conflict)', () => {
+        // The user typed "test", it saved, then updated_at moved out-of-band
+        // (e.g. a schedule/publish). A retry 409s, but the server text matches —
+        // no dialog should appear; the baseline just advances.
+        const saved = hydrated(); // base_text 'hello', no overrides/media
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T15:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(saved, {
+            type: 'saveFailedStale',
+            post: server,
+        });
+        expect(next.saveState).toBe('saved');
+        expect(next.conflict).toBeNull();
+        expect(next.baselineUpdatedAt).toBe('2026-06-12T15:00:00+00:00');
+    });
+
+    it('still opens the conflict dialog when server content genuinely differs', () => {
+        const saved = hydrated();
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'a real concurrent edit',
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T15:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        const next = composerReducer(saved, {
+            type: 'saveFailedStale',
+            post: server,
+        });
+        expect(next.saveState).toBe('conflict');
+        expect(next.conflict?.base_text).toBe('a real concurrent edit');
+    });
+
     it('drops dirty back to idle on saveSkippedEmpty (empty composer, no draft)', () => {
         // A destination change marks an empty new composer dirty; the autosave
         // guard then skips the create and dispatches saveSkippedEmpty.
