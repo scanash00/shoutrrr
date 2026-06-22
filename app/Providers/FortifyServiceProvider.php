@@ -56,6 +56,7 @@ class FortifyServiceProvider extends ServiceProvider
             'status' => $request->session()->get('status'),
             'providers' => SocialProvider::enabledProvidersWithLabels(),
             'invitation' => $request->query('invitation'),
+            ...$this->defaultLoginCredentials(),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
@@ -81,6 +82,25 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
+    }
+
+    /**
+     * Get default login credentials for local development.
+     *
+     * @return array<string, array{email: string, password: string}>
+     */
+    private function defaultLoginCredentials(): array
+    {
+        if (! app()->isLocal()) {
+            return [];
+        }
+
+        return [
+            'defaultLogin' => [
+                'email' => 'test@example.com',
+                'password' => 'password',
+            ],
+        ];
     }
 
     /**

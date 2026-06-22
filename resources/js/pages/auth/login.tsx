@@ -21,6 +21,10 @@ type Props = {
     canResetPassword: boolean;
     providers?: SocialProviderOption[];
     invitation?: string;
+    defaultLogin?: {
+        email: string;
+        password: string;
+    };
 };
 
 export default function Login({
@@ -28,6 +32,7 @@ export default function Login({
     canResetPassword,
     providers = [],
     invitation,
+    defaultLogin,
 }: Props) {
     return (
         <>
@@ -68,6 +73,7 @@ export default function Login({
                                     tabIndex={1}
                                     autoComplete="email"
                                     placeholder="email@example.com"
+                                    defaultValue={defaultLogin?.email}
                                 />
                                 <InputError message={errors.email} />
                             </div>
@@ -92,6 +98,7 @@ export default function Login({
                                     tabIndex={2}
                                     autoComplete="current-password"
                                     placeholder="Password"
+                                    defaultValue={defaultLogin?.password}
                                 />
                                 <InputError message={errors.password} />
                             </div>
