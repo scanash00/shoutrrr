@@ -30,6 +30,27 @@ type FollowerChartProps = {
     posts: AnalyticsPageProps['posts'];
 };
 
+type TooltipPayloadWithDate = readonly {
+    payload?: {
+        date?: Date | number | string | null;
+    };
+}[];
+
+export function formatFollowerTooltipDate(
+    _label: unknown,
+    payload?: TooltipPayloadWithDate,
+): string {
+    const date = payload?.[0]?.payload?.date;
+
+    if (date === undefined || date === null || date === '') {
+        return '';
+    }
+
+    const formattedDate = dayjs(date);
+
+    return formattedDate.isValid() ? formattedDate.format('MMM D, YYYY') : '';
+}
+
 /**
  * The follower-growth line chart. Lives in its own module so recharts (a heavy
  * dependency) is code-split into a lazily-loaded chunk and only fetched when
@@ -109,9 +130,7 @@ export default function FollowerChart({ accounts, posts }: FollowerChartProps) {
                     <ChartTooltip
                         content={
                             <ChartTooltipContent
-                                labelFormatter={(v) =>
-                                    dayjs(v as number).format('MMM D, YYYY')
-                                }
+                                labelFormatter={formatFollowerTooltipDate}
                                 indicator="line"
                             />
                         }
