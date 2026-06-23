@@ -1,5 +1,10 @@
 import { Form } from '@inertiajs/react';
-import { AtSign, BriefcaseBusiness, X as XIcon } from 'lucide-react';
+import {
+    AtSign,
+    BriefcaseBusiness,
+    ChevronDown,
+    X as XIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
@@ -24,6 +29,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import type { Capability } from './types';
+
+export const ADVANCED_SERVICE_URL_TRIGGER_CLASS =
+    '[&[data-state=open]_svg]:rotate-180';
 
 function platformIcon(platform: string) {
     switch (platform) {
@@ -107,8 +115,16 @@ function BlueskyConnectDialog() {
                                             type="button"
                                             variant="ghost"
                                             size="sm"
+                                            className={
+                                                ADVANCED_SERVICE_URL_TRIGGER_CLASS
+                                            }
                                         >
                                             Advanced: service URL
+                                            <ChevronDown
+                                                aria-hidden="true"
+                                                data-icon="inline-end"
+                                                className="size-4 text-muted-foreground transition-transform"
+                                            />
                                         </Button>
                                     </CollapsibleTrigger>
                                     <CollapsibleContent className="grid gap-2 pt-2">

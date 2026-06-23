@@ -33,13 +33,16 @@ const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
 
 const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
 
+export const ACCOUNT_CARD_ACTIONS_CLASS =
+    'mt-1 flex flex-wrap items-center gap-2 border-t border-border pt-4';
+
 function ReconnectBlueskyDialog({ account }: { account: Account }) {
     const [open, setOpen] = useState(false);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="shrink-0">
                     <RefreshCw className="size-4" />
                     Reconnect
                 </Button>
@@ -120,7 +123,7 @@ export function AccountCard({
     return (
         <div
             className={cn(
-                'flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors',
+                'flex flex-col gap-4 rounded-xl border bg-card p-5 transition-colors',
                 needsAttention ? 'border-destructive/40' : 'border-border',
             )}
         >
@@ -219,14 +222,14 @@ export function AccountCard({
             </div>
 
             {canManage && (
-                <div className="mt-1 flex items-center gap-2 border-t border-border pt-3">
+                <div className={ACCOUNT_CARD_ACTIONS_CLASS}>
                     {account.auth_method === 'app_password' ? (
                         <ReconnectBlueskyDialog account={account} />
                     ) : (
                         <Button
                             variant={needsAttention ? 'default' : 'outline'}
                             size="sm"
-                            className="h-8"
+                            className="h-8 shrink-0"
                             onClick={() => onReconnectOAuth(account)}
                         >
                             <RefreshCw className="size-4" />
@@ -239,6 +242,7 @@ export function AccountCard({
                                 account.id,
                             )}
                             options={{ preserveScroll: true }}
+                            className="shrink-0"
                         >
                             {({ processing }) => (
                                 <Button
@@ -256,7 +260,7 @@ export function AccountCard({
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="ml-auto h-8 text-muted-foreground hover:text-destructive"
+                        className="h-8 shrink-0 text-muted-foreground hover:text-destructive sm:ml-auto"
                         onClick={() => onDisconnect(account)}
                     >
                         <Trash2 className="size-4" />

@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/empty';
 import { removeById } from '@/lib/optimistic';
 
+export const ACCOUNT_GRID_CLASS = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
+
 type Props = {
     accounts: Account[];
     capabilities: Capability[];
@@ -127,7 +129,7 @@ export default function ConnectedAccounts({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className={ACCOUNT_GRID_CLASS}>
                         {accounts.map((account) => (
                             <AccountCard
                                 key={account.id}
