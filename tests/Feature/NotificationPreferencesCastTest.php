@@ -22,5 +22,8 @@ test('notification preferences persist and round-trip through the cast', functio
 test('user with no stored preferences returns defaults', function () {
     $user = User::factory()->create();
 
-    expect($user->notificationPreferences()->allows(NotificationType::PostPublished, 'mail'))->toBeTrue();
+    expect($user->notificationPreferences()->allows(NotificationType::PostPublished, 'in_app'))->toBeTrue();
+    expect($user->notificationPreferences()->allows(NotificationType::PostPublished, 'mail'))->toBeFalse();
+    expect($user->notificationPreferences()->allows(NotificationType::PublishFailed, 'mail'))->toBeTrue();
+    expect($user->notificationPreferences()->allows(NotificationType::AccountNeedsAttention, 'mail'))->toBeTrue();
 });

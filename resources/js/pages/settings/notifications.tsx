@@ -100,7 +100,9 @@ export default function Notifications() {
                                 const isAlwaysOn = alwaysOn.includes(event.key);
                                 const row = prefs[event.key] ?? {
                                     in_app: true,
-                                    mail: true,
+                                    mail:
+                                        event.key === 'publish_failed' ||
+                                        event.key === 'account_needs_attention',
                                 };
 
                                 return (

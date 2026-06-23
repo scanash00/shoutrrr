@@ -22,4 +22,12 @@ enum NotificationType: string
             default => false,
         };
     }
+
+    public function emailOnByDefault(): bool
+    {
+        return match ($this) {
+            self::PublishFailed, self::AccountNeedsAttention => true,
+            default => false,
+        };
+    }
 }

@@ -7,12 +7,13 @@ use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Notifications\AccountNeedsAttentionNotification;
 use App\Notifications\PostPublishedNotification;
+use App\Notifications\PublishFailedNotification;
 use App\Notifications\WorkspaceInviteNotification;
 use App\Support\Notifications\NotificationPreferences;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Notification;
 
-test('post published notifies on both channels by default', function () {
+test('post published notifies in-app only by default', function () {
     Notification::fake();
     $user = User::factory()->create();
     $post = Post::factory()->for($user, 'author')->create();
@@ -21,6 +22,19 @@ test('post published notifies on both channels by default', function () {
     $user->notify(new PostPublishedNotification($target));
 
     Notification::assertSentTo($user, PostPublishedNotification::class, function ($notification) use ($user) {
+        return $notification->via($user) === ['database'];
+    });
+});
+
+test('publish failed notifies on both channels by default', function () {
+    Notification::fake();
+    $user = User::factory()->create();
+    $post = Post::factory()->for($user, 'author')->create();
+    $target = PostTarget::factory()->for($post)->create();
+
+    $user->notify(new PublishFailedNotification($target));
+
+    Notification::assertSentTo($user, PublishFailedNotification::class, function ($notification) use ($user) {
         return $notification->via($user) === ['database', 'mail'];
     });
 });

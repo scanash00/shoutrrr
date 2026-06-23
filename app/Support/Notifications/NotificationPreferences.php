@@ -18,7 +18,7 @@ final class NotificationPreferences
         $matrix = [];
 
         foreach (NotificationType::cases() as $type) {
-            $matrix[$type->value] = ['in_app' => true, 'mail' => true];
+            $matrix[$type->value] = ['in_app' => true, 'mail' => $type->emailOnByDefault()];
         }
 
         return new self($matrix);
@@ -44,7 +44,7 @@ final class NotificationPreferences
 
             $prefs->matrix[$type->value] = [
                 'in_app' => (bool) ($row['in_app'] ?? true),
-                'mail' => (bool) ($row['mail'] ?? true),
+                'mail' => (bool) ($row['mail'] ?? $type->emailOnByDefault()),
             ];
         }
 

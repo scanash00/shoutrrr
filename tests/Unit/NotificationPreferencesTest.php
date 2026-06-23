@@ -3,13 +3,17 @@
 use App\Enums\NotificationType;
 use App\Support\Notifications\NotificationPreferences;
 
-test('defaults enable every channel for every event', function () {
+test('defaults enable in-app notifications and only critical email notifications', function () {
     $prefs = NotificationPreferences::defaults();
 
     foreach (NotificationType::cases() as $type) {
         expect($prefs->allows($type, 'in_app'))->toBeTrue();
-        expect($prefs->allows($type, 'mail'))->toBeTrue();
     }
+
+    expect($prefs->allows(NotificationType::PostPublished, 'mail'))->toBeFalse();
+    expect($prefs->allows(NotificationType::WorkspaceInvite, 'mail'))->toBeFalse();
+    expect($prefs->allows(NotificationType::PublishFailed, 'mail'))->toBeTrue();
+    expect($prefs->allows(NotificationType::AccountNeedsAttention, 'mail'))->toBeTrue();
 });
 
 test('always-on in-app events cannot be disabled', function () {
