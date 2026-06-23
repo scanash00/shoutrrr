@@ -50,25 +50,90 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 ## Self-hosting
 
-Shoutrrr ships as a single Docker image. The quickest start uses SQLite with no external services:
+The recommended way to host Shoutrrr is the prebuilt Docker image:
+
+```bash
+docker pull ghcr.io/coollabsio/shoutrrr:latest
+```
+
+The image runs the web app, queue worker, and scheduler in one container — ideal for a single box. It defaults to SQLite with no external services, and you can switch to Postgres/Redis later if you need to scale out.
+
+### Quick start with `docker run`
+
+Create a production env file:
+
+```bash
+cat > .env.prod <<'EOF'
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=http://localhost:8080
+APP_PORT=8080
+APP_KEY=base64:PASTE_GENERATED_KEY_HERE
+
+DB_CONNECTION=sqlite
+
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+SESSION_SECURE_COOKIE=false
+
+QUEUE_WORKER_ENABLED=true
+SCHEDULER_ENABLED=true
+INERTIA_SSR_ENABLED=false
+EOF
+```
+
+Generate an `APP_KEY` and paste it into `.env.prod`:
+
+```bash
+docker run --rm --entrypoint php ghcr.io/coollabsio/shoutrrr:latest /var/www/html/artisan key:generate --show
+```
+
+Start Shoutrrr with persistent volumes:
+
+```bash
+docker volume create shoutrrr-storage
+docker volume create shoutrrr-sqlite
+
+docker run -d \
+  --name shoutrrr \
+  --env-file .env.prod \
+  -p 8080:8080 \
+  -v shoutrrr-storage:/var/www/html/storage \
+  -v shoutrrr-sqlite:/var/www/html/database/sqlite \
+  ghcr.io/coollabsio/shoutrrr:latest
+```
+
+Shoutrrr runs its startup tasks automatically, including database migrations. Open `http://localhost:8080`, register the first account, and you're in.
+
+For a real public deployment, set `APP_URL` to your HTTPS domain and set `SESSION_SECURE_COOKIE=true`. To test a specific release candidate, replace `latest` with a version tag such as `1.0.0-rc.2` in the commands above.
+
+
+To reset all local test data:
+
+```bash
+docker rm -f shoutrrr
+docker volume rm shoutrrr-storage shoutrrr-sqlite
+```
+
+### Docker Compose
+
+If you prefer Compose, use the bundled production file. It pulls the prebuilt image from GHCR (`ghcr.io/coollabsio/shoutrrr:latest`):
 
 ```bash
 git clone https://github.com/coollabsio/shoutrrr.git
 cd shoutrrr
-cp .env.example .env
+cp .env.example.prod .env
 
-# Set an app key and your public URL in .env
-docker compose -f docker-compose.production.yaml run --rm app php artisan key:generate --show   # copy into APP_KEY=
-#   APP_URL=https://social.example.com   (the address you'll visit)
+# Set APP_KEY and APP_URL in .env before starting.
+docker compose -f docker-compose.production.yaml run --rm app php artisan key:generate --show
 
 docker compose -f docker-compose.production.yaml up -d
 ```
 
-The production Compose file pulls the prebuilt image from GHCR (`ghcr.io/coollabsio/shoutrrr:latest`); `docker-compose.development.yaml` builds the image locally from source instead.
+Shoutrrr runs its startup tasks automatically, including database migrations. `docker-compose.development.yaml` builds the image locally from source instead.
 
-Open your `APP_URL`, register the first account, and you're in.
-
-The image runs the web app, queue worker, and scheduler in one container — ideal for a single box. It defaults to SQLite; uncomment the `postgres`/`redis` services in the Compose file (with the matching `.env` values) to scale out, or set `INERTIA_SSR_ENABLED=true` for server-side rendering. To run the worker/scheduler as separate services in the cloud, set `QUEUE_WORKER_ENABLED=false` / `SCHEDULER_ENABLED=false` and override the container command (e.g. `php artisan queue:work`).
+Set `INERTIA_SSR_ENABLED=true` for server-side rendering. To run the worker/scheduler as separate services in the cloud, set `QUEUE_WORKER_ENABLED=false` / `SCHEDULER_ENABLED=false` and override the container command (e.g. `php artisan queue:work`).
 
 ### Deploy with Coolify
 
