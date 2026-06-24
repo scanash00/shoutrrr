@@ -19,10 +19,18 @@ return new class extends Migration
 
             $table->unique(['workspace_id', 'name']);
         });
+
+        Schema::table('posts', function (Blueprint $table): void {
+            $table->json('mentions')->nullable()->after('base_text');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('posts', function (Blueprint $table): void {
+            $table->dropColumn('mentions');
+        });
+
         Schema::dropIfExists('workspace_mentions');
     }
 };
