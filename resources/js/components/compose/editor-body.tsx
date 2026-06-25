@@ -94,6 +94,13 @@ export function hasPasteableMedia(files: FileList | null | undefined): boolean {
     return !!files && Array.from(files).some(isPasteableMediaFile);
 }
 
+export function shouldSelectMentionNameInput(
+    input: HTMLInputElement | null,
+    activeElement: Element | null,
+): boolean {
+    return !!input && input !== activeElement;
+}
+
 export default function EditorBody({
     value,
     onChange,
@@ -251,7 +258,14 @@ export default function EditorBody({
 
         const frame = window.requestAnimationFrame(() => {
             mentionNameInput.current?.focus();
-            mentionNameInput.current?.select();
+            if (
+                shouldSelectMentionNameInput(
+                    mentionNameInput.current,
+                    document.activeElement,
+                )
+            ) {
+                mentionNameInput.current?.select();
+            }
         });
 
         return () => window.cancelAnimationFrame(frame);
