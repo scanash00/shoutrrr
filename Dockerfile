@@ -139,7 +139,8 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     AUTORUN_LARAVEL_STORAGE_LINK=${AUTORUN_LARAVEL_STORAGE_LINK} \
     APP_BASE_DIR=/var/www/html \
     SSL_MODE=${SSL_MODE} \
-    OCTANE_SERVER=frankenphp
+    OCTANE_SERVER=frankenphp \
+    QUEUE_WORKER_COUNT=${QUEUE_WORKER_COUNT}
 
 # Supervisor supervises the web/worker/scheduler/ssr processes
 RUN apt-get update && apt-get install -y --no-install-recommends supervisor \

@@ -41,6 +41,7 @@ services:
             DB_DATABASE: "${DB_DATABASE:-/var/www/html/database/sqlite/database.sqlite}"
             CACHE_STORE: "${CACHE_STORE:-database}"
             QUEUE_CONNECTION: "${QUEUE_CONNECTION:-database}"
+            QUEUE_WORKER_COUNT: "${QUEUE_WORKER_COUNT:-1}"
             SESSION_DRIVER: "${SESSION_DRIVER:-database}"
             MAIL_MAILER: "${DOCKER_MAIL_MAILER:-smtp}"
             MAIL_HOST: "${DOCKER_MAIL_HOST:-mailpit}"
