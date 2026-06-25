@@ -19,6 +19,8 @@ void createInertiaApp({
             // Public, unauthenticated share viewer — no app shell/sidebar.
             case name.startsWith('share/'):
                 return null;
+            case name === 'error':
+                return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
             case name === 'settings/instance' ||

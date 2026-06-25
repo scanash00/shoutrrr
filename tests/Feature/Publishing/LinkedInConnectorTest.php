@@ -44,6 +44,45 @@ test('linkedin creates a single post and returns the urn', function () {
         && $request['author'] === 'urn:li:person:person123');
 });
 
+test('linkedin sends article content for a text-only link post', function () {
+    Http::fake([
+        'https://lnkd.in/dth5NUVP' => Http::response(
+            '<html><head><meta property="og:title" content="coolLabs"><meta property="og:description" content="Software without compromise."><meta property="og:image" content="https://coollabs.io/og.png"></head></html>',
+            200,
+        ),
+        'https://coollabs.io/og.png' => Http::response('image-bytes', 200, ['Content-Type' => 'image/png']),
+        'https://api.linkedin.com/rest/images?action=initializeUpload' => Http::response([
+            'value' => ['uploadUrl' => 'https://upload.linkedin.com/put/preview', 'image' => 'urn:li:image:preview'],
+        ]),
+        'https://upload.linkedin.com/put/preview' => Http::response('', 201),
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:99']),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['testing things https://lnkd.in/dth5NUVP']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.linkedin.com/rest/posts'
+        && ($request['content']['article']['source'] ?? null) === 'https://lnkd.in/dth5NUVP'
+        && ($request['content']['article']['title'] ?? null) === 'coolLabs'
+        && ($request['content']['article']['description'] ?? null) === 'Software without compromise.'
+        && ($request['content']['article']['thumbnail'] ?? null) === 'urn:li:image:preview');
+});
+
+test('linkedin falls back to text-only when link metadata cannot be fetched', function () {
+    Http::fake([
+        'https://example.com/*' => Http::response('', 404),
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:99']),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['hello https://example.com/missing']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.linkedin.com/rest/posts'
+        && ! isset($request['content']));
+});
+
 test('linkedin registers + uploads media and references the asset urn', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/pic.png', 'png-bytes');

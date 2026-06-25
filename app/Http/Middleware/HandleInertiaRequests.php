@@ -60,8 +60,8 @@ class HandleInertiaRequests extends Middleware
                 'providers' => SocialProvider::enabledProviders(),
             ],
             'flash' => [
-                'success' => $request->session()->get('success'),
-                'error' => $request->session()->get('error'),
+                'success' => $request->hasSession() ? $request->session()->get('success') : null,
+                'error' => $request->hasSession() ? $request->session()->get('error') : null,
             ],
             'notifications' => $this->notificationsData($request->user()),
             'features' => [

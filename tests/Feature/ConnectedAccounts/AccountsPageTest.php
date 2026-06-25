@@ -132,3 +132,14 @@ test('members see the list but cannot manage', function () {
 test('the accounts page requires authentication', function () {
     test()->get('/accounts')->assertRedirect(route('login'));
 });
+
+test('get requests to account member paths return not found instead of method not allowed', function () {
+    $owner = viewerInWorkspace(WorkspaceRole::Owner);
+
+    test()->actingAs($owner)
+        ->get('/accounts/does-not-exist')
+        ->assertNotFound()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('error')
+            ->where('status', 404));
+});

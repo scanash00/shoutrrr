@@ -17,11 +17,14 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Inertia\ExceptionResponse;
+use Inertia\Inertia;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 use Override;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,6 +43,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureErrorPages();
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
         // lifetimes Passport defaults to ~1 year, so a leaked bearer is
@@ -82,6 +86,47 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * Render HTTP errors through the Inertia UI instead of Laravel's default
+     * HTML error templates.
+     */
+    protected function configureErrorPages(): void
+    {
+        Inertia::handleExceptionsUsing(function (ExceptionResponse $response): ?ExceptionResponse {
+            if ($response->request->is('api/*') || $response->request->expectsJson()) {
+                return null;
+            }
+
+            $status = $this->errorPageStatus($response);
+
+            if (! in_array($status, [403, 404, 405, 419, 500, 503], true)) {
+                return null;
+            }
+
+            $response->response->setStatusCode($status);
+
+            return $response->render('error', [
+                'status' => $status,
+            ])->withSharedData();
+        });
+    }
+
+    /**
+     * Browsers probing a URL with GET should see "not found" instead of being
+     * told which unsafe methods exist at that path.
+     */
+    protected function errorPageStatus(ExceptionResponse $response): int
+    {
+        if (
+            $response->exception instanceof MethodNotAllowedHttpException
+            && in_array($response->request->method(), ['GET', 'HEAD'], true)
+        ) {
+            return 404;
+        }
+
+        return $response->statusCode();
     }
 
     /**

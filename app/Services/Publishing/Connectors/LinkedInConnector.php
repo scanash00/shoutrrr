@@ -17,6 +17,8 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Throwable;
 
 class LinkedInConnector implements PublishConnector
 {
@@ -100,6 +102,12 @@ class LinkedInConnector implements PublishConnector
                             ),
                         ],
                     ];
+                } else {
+                    $article = $this->articleFromText($text, $author, $token);
+
+                    if ($article !== null) {
+                        $body['content'] = ['article' => $article];
+                    }
                 }
             }
 
@@ -125,6 +133,169 @@ class LinkedInConnector implements PublishConnector
         }
 
         return PublishResult::success([$urn]);
+    }
+
+    /**
+     * LinkedIn's Posts API does not scrape links automatically. When a text-only
+     * post includes a URL, send an explicit article payload so it renders like a
+     * manually-created link post.
+     *
+     * @return array{source: string, title: string, description?: string, thumbnail?: string}|null
+     */
+    private function articleFromText(string $text, string $author, string $token): ?array
+    {
+        $url = $this->firstUrl($text);
+
+        if ($url === null) {
+            return null;
+        }
+
+        try {
+            $response = $this->http
+                ->timeout(5)
+                ->connectTimeout(3)
+                ->accept('text/html,application/xhtml+xml')
+                ->get($url);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $html = $response->body();
+            $source = (string) ($response->effectiveUri() ?? $url);
+            $title = $this->metaContent($html, ['og:title', 'twitter:title']) ?? $this->titleTag($html);
+
+            if ($title === null) {
+                $title = parse_url($source, PHP_URL_HOST) ?: $source;
+            }
+
+            $article = [
+                'source' => $source,
+                'title' => Str::limit($title, 200, ''),
+            ];
+
+            $description = $this->metaContent($html, ['og:description', 'twitter:description', 'description']);
+            if ($description !== null) {
+                $article['description'] = Str::limit($description, 256, '');
+            }
+
+            $imageUrl = $this->absoluteUrl($this->metaContent($html, ['og:image', 'twitter:image']), $source);
+            if ($imageUrl !== null) {
+                $thumbnail = $this->uploadArticleThumbnail($imageUrl, $author, $token);
+
+                if ($thumbnail !== null) {
+                    $article['thumbnail'] = $thumbnail;
+                }
+            }
+
+            return $article;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function firstUrl(string $text): ?string
+    {
+        if (! preg_match('~https?://[^\s<>"\']+~i', $text, $matches)) {
+            return null;
+        }
+
+        return rtrim($matches[0], '.,!?)]}');
+    }
+
+    /**
+     * @param  list<string>  $names
+     */
+    private function metaContent(string $html, array $names): ?string
+    {
+        foreach ($names as $name) {
+            $quotedName = preg_quote($name, '~');
+            $patterns = [
+                '~<meta\b(?=[^>]*(?:property|name)=["\']'.$quotedName.'["\'])(?=[^>]*content=["\']([^"\']+)["\'])[^>]*>~i',
+                '~<meta\b(?=[^>]*content=["\']([^"\']+)["\'])(?=[^>]*(?:property|name)=["\']'.$quotedName.'["\'])[^>]*>~i',
+            ];
+
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $html, $matches)) {
+                    return trim(html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function titleTag(string $html): ?string
+    {
+        if (! preg_match('~<title[^>]*>(.*?)</title>~is', $html, $matches)) {
+            return null;
+        }
+
+        return trim(html_entity_decode(strip_tags($matches[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+
+    private function absoluteUrl(?string $url, string $baseUrl): ?string
+    {
+        if ($url === null || $url === '') {
+            return null;
+        }
+
+        if (Str::startsWith($url, ['http://', 'https://'])) {
+            return $url;
+        }
+
+        $scheme = parse_url($baseUrl, PHP_URL_SCHEME);
+        $host = parse_url($baseUrl, PHP_URL_HOST);
+
+        if (! is_string($scheme) || ! is_string($host)) {
+            return null;
+        }
+
+        if (Str::startsWith($url, '//')) {
+            return $scheme.':'.$url;
+        }
+
+        if (Str::startsWith($url, '/')) {
+            return $scheme.'://'.$host.$url;
+        }
+
+        $path = (string) parse_url($baseUrl, PHP_URL_PATH);
+        $directory = Str::beforeLast($path, '/');
+
+        return $scheme.'://'.$host.$directory.'/'.$url;
+    }
+
+    private function uploadArticleThumbnail(string $url, string $author, string $token): ?string
+    {
+        try {
+            $image = $this->http->timeout(10)->connectTimeout(3)->get($url);
+
+            if ($image->failed()) {
+                return null;
+            }
+
+            $register = $this->http
+                ->withToken($token)
+                ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
+                ->acceptJson()
+                ->post(self::IMAGES_URL, ['initializeUploadRequest' => ['owner' => $author]]);
+
+            if ($register->failed()) {
+                return null;
+            }
+
+            $uploadUrl = (string) $register->json('value.uploadUrl');
+            $urn = (string) $register->json('value.image');
+
+            $upload = $this->http
+                ->withToken($token)
+                ->withBody($image->body(), (string) $image->header('Content-Type', 'image/jpeg'))
+                ->put($uploadUrl);
+
+            return $upload->failed() || $urn === '' ? null : $urn;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
