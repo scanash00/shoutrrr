@@ -49,16 +49,41 @@ export function updateMentionHandle(
     mention: MentionPlaceholder,
     platform: PlatformName,
     handle: string,
+    useMention = true,
 ): MentionPlaceholder {
     const handles = { ...mention.handles };
     const trimmed = handle.trim();
     if (trimmed === '') {
         delete handles[platform];
     } else {
-        handles[platform] = normalizeMentionName(trimmed);
+        handles[platform] = useMention
+            ? normalizeMentionName(trimmed)
+            : trimmed;
     }
 
     return { ...mention, handles };
+}
+
+export function usesPlatformMention(
+    mention: MentionPlaceholder,
+    platform: PlatformName,
+): boolean {
+    return (mention.handles[platform] ?? mention.label).startsWith('@');
+}
+
+export function setPlatformMentionMode(
+    mention: MentionPlaceholder,
+    platform: PlatformName,
+    useMention: boolean,
+): MentionPlaceholder {
+    const current = mention.handles[platform] ?? mention.label;
+
+    return updateMentionHandle(
+        mention,
+        platform,
+        mentionInputValue(current),
+        useMention,
+    );
 }
 
 export function syncMentionsFromText(

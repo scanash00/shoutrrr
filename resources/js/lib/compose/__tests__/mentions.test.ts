@@ -5,8 +5,10 @@ import {
     mentionInputValue,
     mentionToken,
     replaceMentionTokens,
+    setPlatformMentionMode,
     updateMentionHandle,
     syncMentionsFromText,
+    usesPlatformMention,
     type MentionPlaceholder,
 } from '../mentions';
 
@@ -52,6 +54,41 @@ describe('mention helpers', () => {
         expect(updateMentionHandle(mention, 'x', 'guest_x').handles.x).toBe(
             '@guest_x',
         );
+    });
+
+    it('can store plain display text for a platform instead of an @ mention', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { linkedin: '@guest' },
+        };
+
+        const text = updateMentionHandle(
+            mention,
+            'linkedin',
+            'Guest LinkedIn',
+            false,
+        );
+
+        expect(text.handles.linkedin).toBe('Guest LinkedIn');
+        expect(usesPlatformMention(text, 'linkedin')).toBe(false);
+        expect(
+            replaceMentionTokens('Hi {{mention:guest}}', [text], 'linkedin'),
+        ).toBe('Hi Guest LinkedIn');
+    });
+
+    it('toggles a platform between @ mention and display text', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { linkedin: '@guest' },
+        };
+
+        const text = setPlatformMentionMode(mention, 'linkedin', false);
+        const atMention = setPlatformMentionMode(text, 'linkedin', true);
+
+        expect(text.handles.linkedin).toBe('guest');
+        expect(atMention.handles.linkedin).toBe('@guest');
     });
 
     it('shows mention inputs without the permanent @ prefix', () => {

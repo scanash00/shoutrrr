@@ -50,7 +50,7 @@ it('updates an existing saved mention by workspace and name', function () {
         ->and(WorkspaceMention::query()->first()->handles)->toBe(['x' => '@new']);
 });
 
-it('preadds at signs to saved handles', function () {
+it('preserves saved handles as submitted', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
@@ -62,5 +62,20 @@ it('preadds at signs to saved handles', function () {
             'handles' => ['x' => 'taylorotwell'],
         ])
         ->assertSuccessful()
-        ->assertJsonPath('mention.handles.x', '@taylorotwell');
+        ->assertJsonPath('mention.handles.x', 'taylorotwell');
+});
+
+it('preserves saved display text for people without a platform mention', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@taylor',
+            'handles' => ['linkedin' => 'Taylor Otwell'],
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('mention.handles.linkedin', 'Taylor Otwell');
 });

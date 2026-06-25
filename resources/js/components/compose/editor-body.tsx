@@ -15,8 +15,10 @@ import {
 } from '@/components/ui/popover';
 import {
     mentionInputValue,
+    setPlatformMentionMode,
     updateMentionHandle,
     updateMentionName,
+    usesPlatformMention,
 } from '@/lib/compose/mentions';
 import {
     baseTextToDoc,
@@ -384,46 +386,88 @@ export default function EditorBody({
                                 Platform handles
                             </div>
                             <div className="flex flex-col gap-2">
-                                {activePlatforms.map((platform, index) => (
-                                    <label
-                                        key={platform}
-                                        className="flex flex-col gap-1.5 text-xs"
-                                    >
-                                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                            <PlatformGlyph
-                                                platform={platform}
-                                                size={14}
-                                                className="text-foreground"
-                                            />
-                                            <span className="capitalize">
-                                                {platform}
+                                {activePlatforms.map((platform, index) => {
+                                    const useMention = usesPlatformMention(
+                                        activeMention,
+                                        platform,
+                                    );
+                                    const value =
+                                        activeMention.handles[platform] ??
+                                        activeMention.label;
+
+                                    return (
+                                        <label
+                                            key={platform}
+                                            className="flex flex-col gap-1.5 text-xs"
+                                        >
+                                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                                <PlatformGlyph
+                                                    platform={platform}
+                                                    size={14}
+                                                    className="text-foreground"
+                                                />
+                                                <span className="capitalize">
+                                                    {platform}
+                                                </span>
                                             </span>
-                                        </span>
-                                        <InputGroup className="h-9 rounded-lg border-border bg-background">
-                                            <InputGroupAddon>@</InputGroupAddon>
-                                            <InputGroupInput
-                                                value={mentionInputValue(
-                                                    activeMention.handles[
-                                                        platform
-                                                    ] ?? '',
-                                                )}
-                                                placeholder="handle"
-                                                aria-label={`${platform} handle for ${activeMention.label}`}
-                                                onChange={(event) =>
-                                                    updateMention(
-                                                        activeMention,
-                                                        updateMentionHandle(
+                                            <div className="flex gap-2">
+                                                <InputGroup className="h-9 min-w-0 flex-1 rounded-lg border-border bg-background">
+                                                    {useMention && (
+                                                        <InputGroupAddon>
+                                                            @
+                                                        </InputGroupAddon>
+                                                    )}
+                                                    <InputGroupInput
+                                                        value={mentionInputValue(
+                                                            value,
+                                                        )}
+                                                        placeholder={
+                                                            useMention
+                                                                ? 'handle'
+                                                                : 'display name'
+                                                        }
+                                                        aria-label={`${platform} ${
+                                                            useMention
+                                                                ? 'handle'
+                                                                : 'display text'
+                                                        } for ${activeMention.label}`}
+                                                        onChange={(event) =>
+                                                            updateMention(
+                                                                activeMention,
+                                                                updateMentionHandle(
+                                                                    activeMention,
+                                                                    platform,
+                                                                    event.target
+                                                                        .value,
+                                                                    useMention,
+                                                                ),
+                                                            )
+                                                        }
+                                                        autoFocus={index === 0}
+                                                    />
+                                                </InputGroup>
+                                                <button
+                                                    type="button"
+                                                    className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                                    onClick={() =>
+                                                        updateMention(
                                                             activeMention,
-                                                            platform,
-                                                            event.target.value,
-                                                        ),
-                                                    )
-                                                }
-                                                autoFocus={index === 0}
-                                            />
-                                        </InputGroup>
-                                    </label>
-                                ))}
+                                                            setPlatformMentionMode(
+                                                                activeMention,
+                                                                platform,
+                                                                !useMention,
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    {useMention
+                                                        ? 'Use text only'
+                                                        : 'Use @ mention'}
+                                                </button>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
                             </div>
                             {onSaveMention && (
                                 <button
