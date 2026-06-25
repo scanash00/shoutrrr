@@ -29,9 +29,7 @@ class WorkspaceMentionController extends Controller
         foreach ($allowedPlatforms as $platform) {
             $handle = trim((string) ($validated['handles'][$platform] ?? ''));
             if ($handle !== '') {
-                $handles[$platform] = str_starts_with($handle, '@')
-                    ? $handle
-                    : '@'.$handle;
+                $handles[$platform] = $handle;
             }
         }
 
