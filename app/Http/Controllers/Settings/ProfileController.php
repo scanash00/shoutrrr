@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,13 +36,33 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        /** @var User $user */
+        $user = $request->user();
+        $validated = $request->validated();
+        unset($validated['photo']);
 
-        if (config('auth.email_verification.enabled', false) && $request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill($validated);
+
+        if ($request->hasFile('photo')) {
+            $oldAvatarPath = $user->avatar_path;
+            $path = $request->file('photo')->store('profile-photos', 'public');
+
+            if ($path === false) {
+                return back()->withErrors(['photo' => 'The profile photo could not be saved.']);
+            }
+
+            $user->avatar_path = $path;
+
+            if ($oldAvatarPath) {
+                Storage::disk('public')->delete($oldAvatarPath);
+            }
         }
 
-        $request->user()->save();
+        if (config('auth.email_verification.enabled', false) && $user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 

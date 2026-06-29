@@ -7,6 +7,7 @@ namespace App\Http\Requests\Workspace;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Validation\Rules\File;
 
 class UpdateWorkspaceRequest extends FormRequest
 {
@@ -25,6 +26,7 @@ class UpdateWorkspaceRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'photo' => ['nullable', File::image()->max('2mb')],
         ];
     }
 }

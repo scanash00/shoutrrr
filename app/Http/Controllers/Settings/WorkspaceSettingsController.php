@@ -17,6 +17,7 @@ use App\Notifications\WorkspaceInviteNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,7 +58,25 @@ class WorkspaceSettingsController extends Controller
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
 
-        $workspace->update($request->validated());
+        $validated = $request->validated();
+        unset($validated['photo']);
+
+        if ($request->hasFile('photo')) {
+            $oldLogo = $workspace->getRawOriginal('logo');
+            $path = $request->file('photo')->store('workspace-photos', 'public');
+
+            if ($path === false) {
+                return back()->withErrors(['photo' => 'The workspace photo could not be saved.']);
+            }
+
+            $validated['logo'] = $path;
+
+            if (is_string($oldLogo) && $oldLogo !== '' && ! str_starts_with($oldLogo, 'http') && ! str_starts_with($oldLogo, '/')) {
+                Storage::disk('public')->delete($oldLogo);
+            }
+        }
+
+        $workspace->update($validated);
 
         return back()->with('success', 'Workspace updated.');
     }

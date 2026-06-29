@@ -1,6 +1,6 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { ChevronsUpDown } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
@@ -50,6 +50,21 @@ export default function WorkspaceOverview({
 }: Props) {
     const confirmAction = useConfirm();
     const [deleting, setDeleting] = useState(false);
+    const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedPhoto) {
+            setPhotoPreview(null);
+
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(selectedPhoto);
+        setPhotoPreview(previewUrl);
+
+        return () => URL.revokeObjectURL(previewUrl);
+    }, [selectedPhoto]);
 
     async function deleteWorkspace() {
         if (!canDelete || deleting) {
@@ -90,9 +105,66 @@ export default function WorkspaceOverview({
                     {...WorkspaceSettingsController.update.form()}
                     options={{ preserveScroll: true }}
                     className="space-y-6"
+                    onSuccess={() => setSelectedPhoto(null)}
                 >
-                    {({ processing, errors, recentlySuccessful }) => (
+                    {({ processing, errors, recentlySuccessful, progress }) => (
                         <>
+                            <div className="grid gap-2">
+                                <Label htmlFor="workspace-photo">
+                                    Workspace photo
+                                </Label>
+                                <div className="flex items-center gap-4">
+                                    <img
+                                        src={photoPreview ?? workspace.logo}
+                                        alt={workspace.name}
+                                        className="size-16 rounded-md object-cover"
+                                    />
+                                    <div className="grid min-w-0 gap-1">
+                                        <label
+                                            htmlFor="workspace-photo"
+                                            aria-disabled={
+                                                !canManage || processing
+                                            }
+                                            className="inline-flex h-8 w-fit shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary px-3 text-sm font-medium whitespace-nowrap text-primary-foreground transition-all hover:bg-primary/80 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                                        >
+                                            Choose photo
+                                        </label>
+                                        <Input
+                                            id="workspace-photo"
+                                            type="file"
+                                            name="photo"
+                                            accept="image/*"
+                                            disabled={!canManage || processing}
+                                            className="sr-only"
+                                            onChange={(event) =>
+                                                setSelectedPhoto(
+                                                    event.currentTarget
+                                                        .files?.[0] ?? null,
+                                                )
+                                            }
+                                        />
+                                        <p
+                                            className="max-w-56 truncate text-xs text-muted-foreground"
+                                            title={selectedPhoto?.name}
+                                        >
+                                            {selectedPhoto
+                                                ? `Selected: ${selectedPhoto.name}`
+                                                : 'Image up to 2 MB.'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <InputError message={errors.photo} />
+                                {progress && (
+                                    <progress
+                                        value={progress.percentage}
+                                        max="100"
+                                        className="h-2 w-full"
+                                    >
+                                        {progress.percentage}%
+                                    </progress>
+                                )}
+                            </div>
+
                             <div className="grid gap-2">
                                 <Label htmlFor="name">Workspace name</Label>
                                 <Input

@@ -66,6 +66,7 @@ services:
             composer install --no-interaction &&
             php artisan package:discover --ansi &&
             php artisan migrate --force --no-interaction &&
+            php artisan storage:link --force --no-interaction &&
             php artisan db:seed --class=DefaultUserSeeder --force --no-interaction &&
             exec supervisord -c /etc/supervisor/laravel.conf
             "

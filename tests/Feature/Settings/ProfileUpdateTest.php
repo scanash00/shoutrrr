@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -33,6 +35,46 @@ test('profile information can be updated', function () {
     $this->assertSame('Test User', $user->name);
     $this->assertSame('test@example.com', $user->email);
     $this->assertNull($user->email_verified_at);
+});
+
+test('profile photo can be uploaded', function () {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+    $photo = UploadedFile::fake()->image('avatar.jpg');
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => $user->name,
+            'email' => $user->email,
+            'photo' => $photo,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
+
+    $user->refresh();
+
+    expect($user->avatar_path)->toStartWith('profile-photos/');
+    expect($user->avatar)->toBe('/storage/'.$user->avatar_path);
+    Storage::disk('public')->assertExists($user->avatar_path);
+});
+
+test('profile photo must be an image', function () {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->from(route('profile.edit'))
+        ->patch(route('profile.update'), [
+            'name' => $user->name,
+            'email' => $user->email,
+            'photo' => UploadedFile::fake()->create('avatar.txt', 1, 'text/plain'),
+        ])
+        ->assertSessionHasErrors('photo')
+        ->assertRedirect(route('profile.edit'));
+
+    expect($user->refresh()->avatar_path)->toBeNull();
 });
 
 test('email verification status is unchanged when the email address is unchanged', function () {

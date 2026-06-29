@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -35,13 +36,14 @@ use Override;
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
+ * @property string|null $avatar_path
  * @property InstanceRole|null $instance_role
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property NotificationPreferences|null $notification_preferences
  */
 #[Appends(['avatar'])]
-#[Fillable(['name', 'email', 'password', 'current_workspace_id', 'notification_preferences', 'instance_role'])]
+#[Fillable(['name', 'email', 'password', 'current_workspace_id', 'avatar_path', 'notification_preferences', 'instance_role'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
@@ -67,6 +69,12 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     public function getAvatarAttribute(): string
     {
+        $path = $this->attributes['avatar_path'] ?? null;
+
+        if ($path) {
+            return Storage::disk('public')->url($path);
+        }
+
         return "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";
     }
 

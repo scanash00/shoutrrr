@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'name',
@@ -28,7 +29,15 @@ class Workspace extends Model
 
     public function getLogoAttribute(?string $value): string
     {
-        return $value ?: "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";
+        if ($value) {
+            if (str_starts_with($value, 'http') || str_starts_with($value, '/')) {
+                return $value;
+            }
+
+            return Storage::disk('public')->url($value);
+        }
+
+        return "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";
     }
 
     /**
