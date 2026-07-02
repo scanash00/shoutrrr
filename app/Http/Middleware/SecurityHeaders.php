@@ -72,11 +72,12 @@ class SecurityHeaders
             // XSS risk and script-src remains strict.
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
+            "media-src 'self' blob:",
             "font-src 'self' data:",
-            "connect-src 'self' blob:",
+            "connect-src 'self' blob: https:",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action 'self' https:",
             "object-src 'none'",
         ];
 
