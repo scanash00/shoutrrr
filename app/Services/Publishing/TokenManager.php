@@ -6,10 +6,13 @@ namespace App\Services\Publishing;
 
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -17,6 +20,8 @@ use Illuminate\Support\Facades\Date;
 
 class TokenManager
 {
+    use TracksUsage;
+
     private const int SKEW_SECONDS = 120;
 
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
@@ -115,8 +120,8 @@ class TokenManager
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
 
-        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''))
-            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password);
+        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
+            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
 
         if ($tokens === null) {
             $account->forceFill([
@@ -146,17 +151,19 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function refreshBlueskySession(string $pds, string $refreshJwt): ?array
+    private function refreshBlueskySession(string $pds, string $refreshJwt, ConnectedAccount $account): ?array
     {
         if ($refreshJwt === '') {
             return null;
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        return $this->blueskyTokens(
-            $this->http->withToken($refreshJwt)->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.refreshSession')
-        );
+        $response = $this->http->withToken($refreshJwt)->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.refreshSession');
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        return $this->blueskyTokens($response);
     }
 
     /**
@@ -165,19 +172,21 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function createBlueskySession(string $pds, string $identifier, string $appPassword): ?array
+    private function createBlueskySession(string $pds, string $identifier, string $appPassword, ConnectedAccount $account): ?array
     {
         if ($identifier === '' || $appPassword === '') {
             return null;
         }
 
-        return $this->blueskyTokens(
-            $this->http->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.createSession', [
-                    'identifier' => $identifier,
-                    'password' => $appPassword,
-                ])
-        );
+        $response = $this->http->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.createSession', [
+                'identifier' => $identifier,
+                'password' => $appPassword,
+            ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        return $this->blueskyTokens($response);
     }
 
     /**
@@ -264,6 +273,8 @@ class TokenManager
                     ->post((string) $endpoint, $body);
             }
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         if ($response->failed()) {
             $account->forceFill([

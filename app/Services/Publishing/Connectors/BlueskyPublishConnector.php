@@ -9,6 +9,8 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Atproto\DPoP;
@@ -20,6 +22,8 @@ use App\Services\Media\GifToMp4OutputTooLarge;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Closure;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
@@ -31,7 +35,7 @@ use Illuminate\Support\Facades\Storage;
 
 class BlueskyPublishConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string DEFAULT_PDS = 'https://bsky.social';
 
@@ -79,7 +83,7 @@ class BlueskyPublishConnector implements PublishConnector
                 $embed = $this->videoEmbed($context, $gifMedia[0], 'gif');
             } else {
                 // Media rides on the root post only; uploaded once, then embedded below.
-                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session) : null;
+                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session, $context->account) : null;
             }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs
@@ -119,6 +123,8 @@ class BlueskyPublishConnector implements PublishConnector
                     'collection' => 'app.bsky.feed.post',
                     'record' => $record,
                 ]);
+
+                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
                 if ($response->failed()) {
                     return $this->mapFailure($response);
@@ -170,6 +176,9 @@ class BlueskyPublishConnector implements PublishConnector
                 'rkey' => $rkey,
             ]);
 
+            // A 404 means the post is already gone — throwUnlessDeleteAccepted treats it as done.
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
+
             $this->throwUnlessDeleteAccepted($response);
         }
     }
@@ -209,7 +218,7 @@ class BlueskyPublishConnector implements PublishConnector
         return $this->ensureVideoUploadReady(
             $context,
             $media,
-            fn (): string => $this->uploadVideo($media, $pds, $jwt, $did, $session),
+            fn (): string => $this->uploadVideo($media, $pds, $jwt, $did, $session, $context->account),
         );
     }
 
@@ -232,10 +241,10 @@ class BlueskyPublishConnector implements PublishConnector
             return $this->ensureVideoUploadReady(
                 $context,
                 $item,
-                function () use ($item, $pds, $jwt, $did, $session): string {
+                function () use ($item, $pds, $jwt, $did, $session, $context): string {
                     $converted = $this->gifToMp4Converter->convert($item, Platform::Bluesky->maxVideoBytes());
 
-                    return $this->uploadConvertedVideo($converted, $pds, $jwt, $did, $session);
+                    return $this->uploadConvertedVideo($converted, $pds, $jwt, $did, $session, $context->account);
                 },
                 'GIF',
             );
@@ -266,6 +275,8 @@ class BlueskyPublishConnector implements PublishConnector
 
             $status = $this->http->acceptJson()
                 ->get(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -310,23 +321,23 @@ class BlueskyPublishConnector implements PublishConnector
      *
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
-    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session): string
+    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session, ConnectedAccount $account): string
     {
-        return $this->uploadVideoFile($media->disk, $media->path, $pds, $jwt, $did, $session);
+        return $this->uploadVideoFile($media->disk, $media->path, $pds, $jwt, $did, $session, $account);
     }
 
     /**
      * @param  array<string, mixed>  $session
      */
-    private function uploadConvertedVideo(ConvertedVideo $video, string $pds, string $jwt, string $did, array $session): string
+    private function uploadConvertedVideo(ConvertedVideo $video, string $pds, string $jwt, string $did, array $session, ConnectedAccount $account): string
     {
-        return $this->uploadVideoFile($video->disk, $video->path, $pds, $jwt, $did, $session, 'animation.mp4');
+        return $this->uploadVideoFile($video->disk, $video->path, $pds, $jwt, $did, $session, $account, 'animation.mp4');
     }
 
     /**
      * @param  array<string, mixed>  $session
      */
-    private function uploadVideoFile(string $diskName, string $path, string $pds, string $jwt, string $did, array $session, string $name = 'video.mp4'): string
+    private function uploadVideoFile(string $diskName, string $path, string $pds, string $jwt, string $did, array $session, ConnectedAccount $account, string $name = 'video.mp4'): string
     {
         $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
 
@@ -348,6 +359,9 @@ class BlueskyPublishConnector implements PublishConnector
 
         $upload = $this->http->withToken($serviceToken)->withBody($body, 'video/mp4')
             ->post(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name='.rawurlencode($name));
+
+        // A 409 already_exists still carries a usable jobId, so it counts as a successful upload.
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload, succeeded: $upload->successful() || $upload->json('error') === 'already_exists');
 
         // Re-uploading identical bytes returns 409 already_exists but still carries the jobId.
         if ($upload->failed() && $upload->json('error') !== 'already_exists') {
@@ -386,7 +400,7 @@ class BlueskyPublishConnector implements PublishConnector
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}|null
      */
-    private function uploadImages(array $media, string $pds, string $jwt, array $session): ?array
+    private function uploadImages(array $media, string $pds, string $jwt, array $session, ConnectedAccount $account): ?array
     {
         $media = array_slice($media, 0, Platform::Bluesky->maxMedia());
 
@@ -405,6 +419,8 @@ class BlueskyPublishConnector implements PublishConnector
             }
 
             $response = $this->postBodyAuthorized($pds.'/xrpc/com.atproto.repo.uploadBlob', $jwt, $session, $compressed->bytes, $compressed->mime);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $response);
 
             if ($response->failed()) {
                 throw new BlueskyRequestFailed($response);

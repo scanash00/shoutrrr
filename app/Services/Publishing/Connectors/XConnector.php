@@ -9,11 +9,15 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -21,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
 
 class XConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string TWEETS_URL = 'https://api.twitter.com/2/tweets';
 
@@ -66,7 +70,7 @@ class XConnector implements PublishConnector
                 }
                 $mediaIds = [(string) $ready->remoteIds[0]];
             } else {
-                $mediaIds = $this->uploadMedia($context->media, $token);
+                $mediaIds = $this->uploadMedia($context->media, $token, $context->account);
             }
 
             foreach ($context->segments as $index => $text) {
@@ -94,6 +98,8 @@ class XConnector implements PublishConnector
                     ->withToken($token)
                     ->acceptJson()
                     ->post(self::TWEETS_URL, $body);
+
+                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
                 if ($response->failed()) {
                     return $this->mapFailure($response);
@@ -123,6 +129,9 @@ class XConnector implements PublishConnector
 
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $id) {
             $response = $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
+
+            // A 404 means the tweet is already gone — throwUnlessDeleteAccepted treats it as done.
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
 
             $this->throwUnlessDeleteAccepted($response);
         }
@@ -178,13 +187,15 @@ class XConnector implements PublishConnector
 
         try {
             if ($mediaId === null) {
-                $mediaId = $this->uploadChunks($media, $token, $mediaType, $mediaCategory);
+                $mediaId = $this->uploadChunks($media, $token, $mediaType, $mediaCategory, $context->account);
                 $state->markUploaded($media->id, $mediaId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->withToken($token)->acceptJson()
                 ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -224,7 +235,7 @@ class XConnector implements PublishConnector
         }
     }
 
-    private function uploadChunks(PostMedia $media, string $token, string $mediaType, string $mediaCategory): string
+    private function uploadChunks(PostMedia $media, string $token, string $mediaType, string $mediaCategory, ConnectedAccount $account): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
@@ -235,6 +246,7 @@ class XConnector implements PublishConnector
                 'total_bytes' => $total,
                 'media_category' => $mediaCategory,
             ]);
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $init);
         if ($init->failed()) {
             throw new XRequestFailed($init);
         }
@@ -252,6 +264,7 @@ class XConnector implements PublishConnector
                 $append = $this->http->withToken($token)->asMultipart()
                     ->attach('media', $segment, 'chunk')
                     ->post(self::MEDIA_BASE.'/'.$mediaId.'/append', ['segment_index' => $segmentIndex]);
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $append);
                 if ($append->failed()) {
                     throw new XRequestFailed($append);
                 }
@@ -263,6 +276,7 @@ class XConnector implements PublishConnector
 
         $finalize = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/'.$mediaId.'/finalize');
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
         if ($finalize->failed()) {
             throw new XRequestFailed($finalize);
         }
@@ -274,7 +288,7 @@ class XConnector implements PublishConnector
      * @param  list<PostMedia>  $media
      * @return list<string>
      */
-    private function uploadMedia(array $media, string $token): array
+    private function uploadMedia(array $media, string $token, ConnectedAccount $account): array
     {
         $ids = [];
 
@@ -286,6 +300,8 @@ class XConnector implements PublishConnector
                 ->asMultipart()
                 ->attach('media', $compressed->bytes, 'upload')
                 ->post(self::MEDIA_URL, ['media_category' => 'tweet_image']);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $response);
 
             if ($response->failed()) {
                 throw new XRequestFailed($response);
